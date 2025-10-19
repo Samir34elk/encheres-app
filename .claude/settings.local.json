@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(source:*)",
+      "Bash(python3:*)",
+      "Bash(timeout 3 python3:*)",
+      "Bash(pip install:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker exec:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s http://localhost:8000/api/v1/auth/test)",
+      "Bash(curl -s http://localhost:8000/openapi.json)",
+      "Bash(chmod +x test_api.py)",
+      "Bash(docker compose logs backend --tail 50)",
+      "Bash(docker-compose logs backend --tail 50)",
+      "Bash(journalctl --user-unit docker -n 50)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/sales?page=1&size=5\")",
+      "Bash(curl -s -I http://localhost:5173)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

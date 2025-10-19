@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+venv/
+env/
+ENV/
+.venv/
+backend/.venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+frontend/dist/
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads
+uploads/
+backend/uploads/
+
+# Cache
+.cache/
+*.cache
+.pytest_cache/
+
+# Playwright
+playwright-report/
+test-results/
+backend/playwright-report/
+backend/test-results/
+
+# CSV files (keep example, ignore data)
+encheres.csv
+
+# Logs & misc
+*.pid
+*.pid.lock
+*.tar
+*.tgz
+*.gz
+
+# Backup files
+*.bak
+*.backup
