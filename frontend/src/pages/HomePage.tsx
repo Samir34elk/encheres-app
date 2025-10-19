@@ -1,9 +1,16 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Search, Bell, Heart, BarChart3 } from 'lucide-react'
+import DashboardPage from './DashboardPage'
+import { useAuthStore } from '../stores/authStore'
 
 export default function HomePage() {
   const { t } = useTranslation()
+  const { isAuthenticated } = useAuthStore()
+
+  if (isAuthenticated) {
+    return <DashboardPage />
+  }
 
   const features = [
     {
@@ -33,7 +40,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="text-center py-20">
         <h1 className="text-5xl font-bold mb-6 text-gray-900 dark:text-white">
-          {t('welcome')} - Enchères du Domaine
+          {t('welcome')} - Suivi Enchères
         </h1>
         <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
           Suivez les enchères du domaine public en temps réel. Recevez des alertes,

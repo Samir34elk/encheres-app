@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Heart, Bell, TrendingDown, Eye, Package } from 'lucide-react'
+import { Heart, Bell, TrendingUp, Eye, Package, ExternalLink } from 'lucide-react'
 import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
@@ -13,13 +13,15 @@ interface DashboardStats {
 }
 
 interface FavoriteLot {
-  id: number
-  lot_number: number
+  favoriteId: number
+  lotId: number
+  lotNumber: number
   title: string
   price: number | null
-  image_url: string | null
+  status: string | null
+  imageUrl: string | null
   url: string | null
-  price_changed: boolean
+  priceChanged: boolean
 }
 
 interface Alert {
@@ -49,7 +51,18 @@ export default function DashboardPage() {
 
       // Fetch user's favorites
       const { data: favoritesData } = await api.get('/favorites')
-      const favorites = favoritesData?.items || []
+      const favorites = (favoritesData?.items || []).map((favorite: any) => ({
+        favoriteId: favorite.id,
+        lotId: favorite.lot_id,
+        lotNumber: favorite.lot_number,
+        title: favorite.lot_title,
+        price: favorite.lot_price,
+        status: favorite.lot_status,
+        imageUrl: favorite.lot_image_url,
+        url: favorite.lot_url,
+        priceChanged: Boolean(favorite.price_changed)
+      })) as FavoriteLot[]
+
       setRecentFavorites(favorites.slice(0, 6))
 
       // Fetch user's alerts
@@ -60,7 +73,7 @@ export default function DashboardPage() {
       setStats({
         total_favorites: favorites.length,
         total_alerts: alertsData?.items?.filter((a: Alert) => a.is_active).length || 0,
-        recent_price_changes: favorites.filter((f: FavoriteLot) => f.price_changed).length,
+        recent_price_changes: favorites.filter((f: FavoriteLot) => f.priceChanged).length,
         new_lots_today: 0 // À implémenter côté backend
       })
 
@@ -74,12 +87,14 @@ export default function DashboardPage() {
 
   const getAlertTypeLabel = (type: string) => {
     switch (type) {
-      case 'price_drop':
-        return 'Baisse de prix'
       case 'price_below':
-        return 'Prix sous seuil'
+        return 'Prix sous mon budget'
+      case 'price_drop':
+        return 'Prix revu à la baisse'
       case 'any_change':
-        return 'Tout changement'
+        return 'Nouvelle enchère ou mise à jour'
+      case 'price_change':
+        return 'Variation de prix'
       default:
         return type
     }
@@ -130,10 +145,10 @@ export default function DashboardPage() {
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-100 text-sm font-medium">Prix modifiés</p>
+              <p className="text-green-100 text-sm font-medium">Lots en mouvement</p>
               <p className="text-4xl font-bold mt-2">{stats?.recent_price_changes || 0}</p>
             </div>
-            <TrendingDown className="w-12 h-12 opacity-30" />
+            <TrendingUp className="w-12 h-12 opacity-30" />
           </div>
         </div>
 
@@ -179,13 +194,13 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {recentFavorites.map((lot) => (
               <Link
-                key={lot.id}
-                to={`/lots/${lot.id}`}
+                key={lot.favoriteId}
+                to={`/lots/${lot.lotId}`}
                 className="group relative bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
               >
-                {lot.image_url ? (
+                {lot.imageUrl ? (
                   <img
-                    src={lot.image_url}
+                    src={lot.imageUrl}
                     alt={lot.title}
                     className="w-full h-40 object-cover"
                   />
@@ -195,9 +210,9 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {lot.price_changed && (
+                {lot.priceChanged && (
                   <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                    <TrendingDown className="w-3 h-3" />
+                    <TrendingUp className="w-3 h-3" />
                     Prix modifié
                   </div>
                 )}
@@ -208,14 +223,31 @@ export default function DashboardPage() {
                   </h3>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Lot #{lot.lot_number}
+                      Lot #{lot.lotNumber}
                     </span>
-                    {lot.price && (
+                    {lot.price !== null && (
                       <span className="text-lg font-bold text-green-600 dark:text-green-400">
                         {lot.price.toLocaleString()} €
                       </span>
                     )}
                   </div>
+                  {lot.status && (
+                    <span className="mt-2 inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                      {lot.status}
+                    </span>
+                  )}
+                  {lot.url && (
+                    <a
+                      href={lot.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                      onClick={event => event.stopPropagation()}
+                    >
+                      Voir sur le site officiel
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                 </div>
               </Link>
             ))}
@@ -319,7 +351,7 @@ export default function DashboardPage() {
           <Bell className="w-8 h-8 mb-3 opacity-80" />
           <h3 className="text-lg font-semibold mb-2">Mes alertes</h3>
           <p className="text-green-100 text-sm">
-            Configurez des alertes de prix et recevez des notifications
+            Configurez des alertes d&apos;activité pour ne rien manquer
           </p>
         </Link>
       </div>

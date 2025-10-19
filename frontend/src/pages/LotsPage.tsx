@@ -3,6 +3,7 @@ import { Search, Heart, ExternalLink, Filter, X, ChevronDown, ChevronUp } from '
 import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
+import { parseSaleMetadata } from '../utils/saleMetadata'
 
 interface Lot {
   id: number
@@ -34,11 +35,17 @@ export default function LotsPage() {
   const [selectedStatus, setSelectedStatus] = useState('')
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedSaleIds, setSelectedSaleIds] = useState<number[]>([])
 
   // Display options
-  const [displayLimit, setDisplayLimit] = useState<number>(1000)
+  const displayOptions = [50, 100, 500, 1000, 10000]
+
+  const [displayLimit, setDisplayLimit] = useState<number>(100)
+  const [displayPage, setDisplayPage] = useState<number>(1)
   const [sortField, setSortField] = useState<SortField>('price')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [salesMetadata, setSalesMetadata] = useState<Record<number, { title: string; saleNumber: number; tags: string[] }>>({})
+  const [loadingSalesMetadata, setLoadingSalesMetadata] = useState(false)
 
   // Load favorites from localStorage
   useEffect(() => {
@@ -74,6 +81,47 @@ export default function LotsPage() {
     }
 
     fetchLots()
+  }, [])
+
+  useEffect(() => {
+    const fetchSalesMetadata = async () => {
+      try {
+        setLoadingSalesMetadata(true)
+        const metadata: Record<number, { title: string; saleNumber: number; tags: string[] }> = {}
+        let currentPage = 1
+        const pageSize = 100
+        let totalPages = 1
+
+        while (currentPage <= totalPages) {
+          const { data } = await api.get('/sales', {
+            params: { page: currentPage, size: pageSize }
+          })
+          const items = data.items || []
+          totalPages = data.pages || 1
+
+          for (const sale of items) {
+            if (sale.status === 'cancelled') continue
+            const parsed = parseSaleMetadata(sale.description)
+            metadata[sale.id] = {
+              title: sale.title,
+              saleNumber: sale.sale_number,
+              tags: parsed.tags
+            }
+          }
+
+          currentPage += 1
+        }
+
+        setSalesMetadata(metadata)
+      } catch (error) {
+        console.error('Failed to fetch sales metadata:', error)
+        toast.error('Impossible de charger les informations de ventes')
+      } finally {
+        setLoadingSalesMetadata(false)
+      }
+    }
+
+    fetchSalesMetadata()
   }, [])
 
   // Toggle favorite
@@ -114,6 +162,26 @@ export default function LotsPage() {
     return Array.from(statuses).sort()
   }, [lots])
 
+  const availableSaleOptions = useMemo(() => {
+    const idsInLots = new Set<number>()
+    lots.forEach(lot => {
+      if (lot.sale_id) idsInLots.add(lot.sale_id)
+    })
+
+    return Array.from(idsInLots)
+      .map(id => {
+        const meta = salesMetadata[id]
+        const label = meta?.title || `Vente #${meta?.saleNumber ?? id}`
+        return {
+          id,
+          label,
+          tags: meta?.tags || []
+        }
+      })
+      .filter(option => option.label)
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr'))
+  }, [lots, salesMetadata])
+
   // Filter and sort lots
   const filteredLots = useMemo(() => {
     let filtered = lots.filter(lot => {
@@ -136,6 +204,10 @@ export default function LotsPage() {
 
       // Status filter
       if (selectedStatus && lot.status !== selectedStatus) return false
+
+      if (selectedSaleIds.length > 0) {
+        if (!lot.sale_id || !selectedSaleIds.includes(lot.sale_id)) return false
+      }
 
       // Favorites filter
       if (showFavoritesOnly && !favorites.has(lot.id)) return false
@@ -167,9 +239,28 @@ export default function LotsPage() {
       }
     })
 
-    // Apply display limit
-    return filtered.slice(0, displayLimit)
-  }, [lots, searchTerm, minPrice, maxPrice, selectedLocation, selectedStatus, showFavoritesOnly, favorites, sortField, sortOrder, displayLimit])
+    return filtered
+  }, [lots, searchTerm, minPrice, maxPrice, selectedLocation, selectedStatus, selectedSaleIds, showFavoritesOnly, favorites, salesMetadata, sortField, sortOrder])
+
+  const totalFilteredLots = filteredLots.length
+  const totalPages = Math.max(1, Math.ceil(totalFilteredLots / displayLimit))
+  const baseCountLabel =
+    totalFilteredLots !== lots.length ? ` (sur ${lots.length} lots indexés)` : ''
+
+  const paginatedLots = useMemo(() => {
+    const startIndex = (displayPage - 1) * displayLimit
+    return filteredLots.slice(startIndex, startIndex + displayLimit)
+  }, [filteredLots, displayLimit, displayPage])
+
+  useEffect(() => {
+    setDisplayPage(1)
+  }, [searchTerm, minPrice, maxPrice, selectedLocation, selectedStatus, showFavoritesOnly, selectedSaleIds, displayLimit])
+
+  useEffect(() => {
+    if (displayPage > totalPages) {
+      setDisplayPage(totalPages)
+    }
+  }, [displayPage, totalPages])
 
   const clearFilters = () => {
     setSearchTerm('')
@@ -178,9 +269,17 @@ export default function LotsPage() {
     setSelectedLocation('')
     setSelectedStatus('')
     setShowFavoritesOnly(false)
+    setSelectedSaleIds([])
   }
 
-  const hasActiveFilters = searchTerm || minPrice !== '' || maxPrice !== '' || selectedLocation || selectedStatus || showFavoritesOnly
+  const hasActiveFilters =
+    searchTerm ||
+    minPrice !== '' ||
+    maxPrice !== '' ||
+    selectedLocation ||
+    selectedStatus ||
+    showFavoritesOnly ||
+    selectedSaleIds.length > 0
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -202,39 +301,77 @@ export default function LotsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Liste des Enchères
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            {filteredLots.length} lot{filteredLots.length > 1 ? 's' : ''} affiché{filteredLots.length > 1 ? 's' : ''} sur {lots.length}
+            {paginatedLots.length} lot{paginatedLots.length > 1 ? 's' : ''} affiché{paginatedLots.length > 1 ? 's' : ''} sur {totalFilteredLots} résultat{totalFilteredLots > 1 ? 's' : ''}{baseCountLabel}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-              showFilters
-                ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600'
-                : 'bg-white border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filtres
-          </button>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="group flex items-center gap-0 rounded-full border border-gray-200 bg-white px-2 py-1 shadow-sm transition-all duration-500 ease-out hover:shadow-lg dark:border-gray-700 dark:bg-gray-800 md:gap-3">
+            <div className="flex items-center gap-0 group-hover:gap-2">
+              {displayOptions.map(option => {
+                const isActive = displayLimit === option
+                const label = option === 10000 ? 'Tous' : option
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setDisplayLimit(option)
+                      setDisplayPage(1)
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-all duration-400 ease-out ${
+                      isActive
+                        ? 'inline-flex bg-primary-600 text-white shadow-sm'
+                        : 'hidden group-hover:inline-flex text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              lots / page
+            </span>
+          </div>
 
-          <label className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <input
-              type="checkbox"
-              checked={showFavoritesOnly}
-              onChange={(e) => setShowFavoritesOnly(e.target.checked)}
-              className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-            />
-            <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-pink-500 text-pink-500' : 'text-gray-600 dark:text-gray-400'}`} />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Ne voir que les favoris</span>
-          </label>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                showFilters
+                  ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600'
+                  : 'bg-white border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              Filtres
+            </button>
+
+            <button
+              onClick={() => setShowFavoritesOnly(prev => !prev)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                showFavoritesOnly
+                  ? 'border-pink-200 bg-pink-50 text-pink-600 dark:border-pink-500/50 dark:bg-pink-500/10 dark:text-pink-200'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={showFavoritesOnly}
+                onChange={(e) => setShowFavoritesOnly(e.target.checked)}
+                className="sr-only"
+              />
+              <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+              <span className="text-sm">Ne voir que les favoris</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -259,50 +396,44 @@ export default function LotsPage() {
               </div>
             </div>
 
-            {/* Min Price */}
-            <div>
+            {/* Price range */}
+            <div className="lg:col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Prix min (€)
+                Prix
               </label>
-              <input
-                type="number"
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                placeholder="0"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Max Price */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Prix max (€)
-              </label>
-              <input
-                type="number"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder="∞"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Display limit */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Nombre de lots
-              </label>
-              <select
-                value={displayLimit}
-                onChange={(e) => setDisplayLimit(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value={50}>50 lots</option>
-                <option value={100}>100 lots</option>
-                <option value={500}>500 lots</option>
-                <option value={1000}>1000 lots</option>
-                <option value={10000}>Tous les lots</option>
-              </select>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex flex-1 items-center rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-200 dark:border-gray-600 dark:bg-gray-700 dark:focus-within:border-primary-400 dark:focus-within:ring-primary-700/30">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Min
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    className="ml-2 w-full bg-transparent text-sm text-gray-900 outline-none dark:text-white"
+                  />
+                </div>
+                <span className="hidden text-xs font-semibold uppercase tracking-wide text-gray-400 sm:inline dark:text-gray-500">
+                  à
+                </span>
+                <div className="flex flex-1 items-center rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-200 dark:border-gray-600 dark:bg-gray-700 dark:focus-within:border-primary-400 dark:focus-within:ring-primary-700/30">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Max
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Illimité"
+                    className="ml-2 w-full bg-transparent text-sm text-gray-900 outline-none dark:text-white"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Location */}
@@ -339,6 +470,49 @@ export default function LotsPage() {
               </select>
             </div>
 
+            {/* Sales filter */}
+            <div className="lg:col-span-5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Ventes
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {loadingSalesMetadata && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Chargement…</span>
+                )}
+                {!loadingSalesMetadata && availableSaleOptions.length === 0 && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Aucune vente active détectée</span>
+                )}
+                {availableSaleOptions.map(({ id, label }) => {
+                  const isActive = selectedSaleIds.includes(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedSaleIds(prev =>
+                          prev.includes(id)
+                            ? prev.filter(value => value !== id)
+                            : [...prev, id]
+                        )
+                      }
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                        isActive
+                          ? 'bg-primary-600 text-white shadow-sm'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedSaleIds.length > 0 && (
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {selectedSaleIds.length} vente{selectedSaleIds.length > 1 ? 's' : ''} sélectionnée{selectedSaleIds.length > 1 ? 's' : ''}.
+                </p>
+              )}
+            </div>
+
             {/* Clear filters */}
             {hasActiveFilters && (
               <div className="flex items-end">
@@ -356,7 +530,7 @@ export default function LotsPage() {
       )}
 
       {/* Table */}
-      {filteredLots.length === 0 ? (
+      {totalFilteredLots === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <Search className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -368,6 +542,27 @@ export default function LotsPage() {
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300 md:flex-row md:items-center md:justify-between">
+            <span>
+              Page {displayPage} sur {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDisplayPage(p => Math.max(1, p - 1))}
+                disabled={displayPage === 1}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition disabled:cursor-not-allowed disabled:opacity-50 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Précédent
+              </button>
+              <button
+                onClick={() => setDisplayPage(p => Math.min(totalPages, p + 1))}
+                disabled={displayPage === totalPages}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition disabled:cursor-not-allowed disabled:opacity-50 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Suivant
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10 shadow-sm">
@@ -429,7 +624,7 @@ export default function LotsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredLots.map((lot) => (
+                {paginatedLots.map((lot) => (
                   <TableRow
                     key={lot.id}
                     lot={lot}
@@ -439,6 +634,27 @@ export default function LotsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300 md:flex-row md:items-center md:justify-between">
+            <span>
+              Page {displayPage} sur {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDisplayPage(p => Math.max(1, p - 1))}
+                disabled={displayPage === 1}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition disabled:cursor-not-allowed disabled:opacity-50 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Précédent
+              </button>
+              <button
+                onClick={() => setDisplayPage(p => Math.min(totalPages, p + 1))}
+                disabled={displayPage === totalPages}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition disabled:cursor-not-allowed disabled:opacity-50 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Suivant
+              </button>
+            </div>
           </div>
         </div>
       )}

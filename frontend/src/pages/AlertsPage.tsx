@@ -10,7 +10,7 @@ interface Alert {
   lot_number: number
   lot_title: string
   lot_price: number | null
-  alert_type: 'price_drop' | 'price_below' | 'any_change'
+  alert_type: 'price_drop' | 'price_below' | 'any_change' | 'price_change'
   target_price: number | null
   is_active: boolean
   created_at: string
@@ -21,8 +21,37 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
   const [editingAlert, setEditingAlert] = useState<number | null>(null)
-  const [editAlertType, setEditAlertType] = useState<Alert['alert_type']>('price_drop')
+  const [editAlertType, setEditAlertType] = useState<Alert['alert_type']>('any_change')
   const [editTargetPrice, setEditTargetPrice] = useState<string>('')
+
+  const alertTypeOptions: Array<{
+    value: Alert['alert_type']
+    label: string
+    helper: string
+    disabled?: boolean
+  }> = [
+    {
+      value: 'any_change',
+      label: 'Nouvelle enchère ou mise à jour',
+      helper: 'Recevez un message dès qu\'une enchère bouge ou qu\'un détail change.'
+    },
+    {
+      value: 'price_below',
+      label: 'Prix sous mon budget cible',
+      helper: 'Soyez alerté tant que le lot reste sous le seuil que vous fixez.'
+    },
+    {
+      value: 'price_drop',
+      label: 'Prix revu à la baisse',
+      helper: 'Idéal pour les ventes dégressives ou les rabais de dernière minute.'
+    },
+    {
+      value: 'price_change',
+      label: 'Variation de prix (héritage)',
+      helper: 'Préférence conservée depuis l\'ancienne version de vos alertes.',
+      disabled: true
+    }
+  ]
 
   useEffect(() => {
     fetchAlerts()
@@ -96,12 +125,14 @@ export default function AlertsPage() {
 
   const getAlertTypeLabel = (type: string) => {
     switch (type) {
-      case 'price_drop':
-        return 'Baisse de prix'
       case 'price_below':
-        return 'Prix sous seuil'
+        return 'Prix sous mon budget'
+      case 'price_drop':
+        return 'Prix revu à la baisse'
       case 'any_change':
-        return 'Tout changement'
+        return 'Nouvelle enchère ou mise à jour'
+      case 'price_change':
+        return 'Variation de prix'
       default:
         return type
     }
@@ -109,12 +140,14 @@ export default function AlertsPage() {
 
   const getAlertTypeBadge = (type: string) => {
     switch (type) {
-      case 'price_drop':
-        return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
       case 'price_below':
         return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+      case 'price_drop':
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
       case 'any_change':
         return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+      case 'price_change':
+        return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400'
     }
@@ -164,9 +197,9 @@ export default function AlertsPage() {
               Comment fonctionnent les alertes ?
             </h3>
             <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
-              <li>• <strong>Baisse de prix</strong> : Vous serez notifié dès que le prix diminue</li>
-              <li>• <strong>Prix sous seuil</strong> : Alerte lorsque le prix passe sous votre seuil défini</li>
-              <li>• <strong>Tout changement</strong> : Notifié à chaque modification du lot</li>
+              <li>• <strong>Nouvelle enchère</strong> : nous vous prévenons dès qu&apos;une mise bouge ou qu&apos;un détail évolue.</li>
+              <li>• <strong>Prix sous mon budget</strong> : définissez un plafond et gardez un œil sur les opportunités accessibles.</li>
+              <li>• <strong>Prix revu à la baisse</strong> : utile pour les ventes dégressives ou les rabais de dernière minute.</li>
             </ul>
           </div>
         </div>
@@ -195,13 +228,22 @@ export default function AlertsPage() {
                         </label>
                         <select
                           value={editAlertType}
-                          onChange={(e) => setEditAlertType(e.target.value as any)}
+                          onChange={(e) => setEditAlertType(e.target.value as Alert['alert_type'])}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         >
-                          <option value="price_drop">Baisse de prix</option>
-                          <option value="price_below">Prix sous un seuil</option>
-                          <option value="any_change">Tout changement</option>
+                          {alertTypeOptions.map(option => (
+                            <option
+                              key={option.value}
+                              value={option.value}
+                              disabled={option.disabled && option.value !== editAlertType}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
                         </select>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          {alertTypeOptions.find(option => option.value === editAlertType)?.helper}
+                        </p>
                       </div>
 
                       {editAlertType === 'price_below' && (
@@ -252,6 +294,9 @@ export default function AlertsPage() {
                           {getAlertTypeLabel(alert.alert_type)}
                         </span>
                       </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        {alertTypeOptions.find(option => option.value === alert.alert_type)?.helper}
+                      </p>
 
                       <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                         <span>Lot #{alert.lot_number}</span>
@@ -259,7 +304,7 @@ export default function AlertsPage() {
                           <>
                             <span>•</span>
                             <span className="font-medium text-gray-900 dark:text-white">
-                              Prix actuel: {alert.lot_price.toLocaleString()} €
+                              Enchère actuelle&nbsp;: {alert.lot_price.toLocaleString()} €
                             </span>
                           </>
                         )}
@@ -325,19 +370,23 @@ export default function AlertsPage() {
                 className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 opacity-60"
               >
                 <div className="flex-1">
-                  <Link
-                    to={`/lots/${alert.lot_id}`}
-                    className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400"
-                  >
-                    {alert.lot_title}
-                  </Link>
-                  <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    <span>{getAlertTypeLabel(alert.alert_type)}</span>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      to={`/lots/${alert.lot_id}`}
+                      className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      {alert.lot_title}
+                    </Link>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getAlertTypeBadge(alert.alert_type)}`}>
+                      {getAlertTypeLabel(alert.alert_type)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {alertTypeOptions.find(option => option.value === alert.alert_type)?.helper}
+                  </p>
+                  <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-2">
                     {alert.target_price && (
-                      <>
-                        <span>•</span>
-                        <span>Seuil: {alert.target_price.toLocaleString()} €</span>
-                      </>
+                      <span>Seuil: {alert.target_price.toLocaleString()} €</span>
                     )}
                   </div>
                 </div>
@@ -372,7 +421,7 @@ export default function AlertsPage() {
             Aucune alerte configurée
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Créez des alertes pour être notifié des changements de prix
+            Créez des alertes pour suivre les nouvelles enchères et garder l&apos;avantage.
           </p>
           <Link
             to="/lots"

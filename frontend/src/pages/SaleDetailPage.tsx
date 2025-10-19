@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Search, Heart, ExternalLink, Filter, X, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
+import { Search, Heart, ExternalLink, Filter, X, ChevronDown, ChevronUp, ArrowLeft, MapPin } from 'lucide-react'
 import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
+import { parseSaleMetadata } from '../utils/saleMetadata'
 
 interface Lot {
   id: number
@@ -25,6 +26,8 @@ interface Sale {
   description: string | null
   status: string
   total_lots: number
+  start_date?: string | null
+  end_date?: string | null
 }
 
 type SortField = 'price' | 'lot_number' | 'title' | 'status' | 'depot_location'
@@ -51,6 +54,53 @@ export default function SaleDetailPage() {
   const [displayLimit, setDisplayLimit] = useState<number>(1000)
   const [sortField, setSortField] = useState<SortField>('price')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+
+  const saleMetadata = useMemo(() => parseSaleMetadata(sale?.description ?? null), [sale?.description])
+
+  const getStatusBadge = (status: string) => {
+    const statuses: Record<string, string> = {
+      active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+      closed: 'bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gray-300',
+      upcoming: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+      cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+    }
+    return statuses[status] || statuses.active
+  }
+
+  const getStatusLabel = (status: string, fallback?: string) => {
+    switch (status) {
+      case 'active':
+        return 'Enchères en cours'
+      case 'closed':
+        return 'Vente clôturée'
+      case 'upcoming':
+        return 'Vente à venir'
+      case 'cancelled':
+        return 'Vente annulée'
+      default:
+        return fallback || status
+    }
+  }
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return null
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return null
+
+    const datePart = parsed.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    })
+    const timePart = parsed.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    return `${datePart} · ${timePart}`
+  }
+
+  const saleStartDate = useMemo(() => formatDateTime(sale?.start_date ?? null), [sale?.start_date])
+  const saleEndDate = useMemo(() => formatDateTime(sale?.end_date ?? null), [sale?.end_date])
 
   // Load favorites from localStorage
   useEffect(() => {
@@ -231,28 +281,84 @@ export default function SaleDetailPage() {
 
         {sale && (
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-3">
+                {saleMetadata.saleType && (
+                  <span className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:bg-primary-500/10 dark:text-primary-200">
+                    {saleMetadata.saleType}
+                  </span>
+                )}
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                   {sale.title}
                 </h1>
-                <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                  <span>Vente N°{sale.sale_number}</span>
-                  <span>•</span>
-                  <span>{sale.total_lots} lot{sale.total_lots > 1 ? 's' : ''}</span>
-                  <span>•</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    sale.status === 'active'
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
-                  }`}>
-                    {sale.status === 'active' ? 'En cours' : 'Fermée'}
+
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                    {sale.total_lots} lot{sale.total_lots > 1 ? 's' : ''}
                   </span>
+                  {saleStartDate && (
+                    <>
+                      <span>•</span>
+                      <span>
+                        Débute&nbsp;:
+                        <span className="font-medium text-gray-900 dark:text-gray-100"> {saleStartDate}</span>
+                      </span>
+                    </>
+                  )}
+                  {saleEndDate && (
+                    <>
+                      <span>•</span>
+                      <span>
+                        Clôture&nbsp;:
+                        <span className="font-medium text-gray-900 dark:text-gray-100"> {saleEndDate}</span>
+                      </span>
+                    </>
+                  )}
                 </div>
-                {sale.description && (
-                  <p className="text-gray-600 dark:text-gray-400 mt-3">
-                    {sale.description}
+
+                {saleMetadata.organizer && (
+                  <p className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <MapPin className="h-4 w-4 text-primary-500 dark:text-primary-300" />
+                    <span>
+                      Organisateur&nbsp;:
+                      <span className="ml-1 font-semibold text-gray-900 dark:text-gray-100">
+                        {saleMetadata.organizer}
+                      </span>
+                    </span>
                   </p>
+                )}
+
+                {saleMetadata.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {saleMetadata.tags.slice(0, 6).map(tag => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-200"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    {saleMetadata.tags.length > 6 && (
+                      <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        +{saleMetadata.tags.length - 6}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-gray-500 dark:text-gray-500">
+                  Référence interne&nbsp;: #{sale.sale_number}
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start gap-2 md:items-end">
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusBadge(sale.status)}`}>
+                  {getStatusLabel(sale.status, saleMetadata.statusLabel)}
+                </span>
+                {sale.status === 'cancelled' && (
+                  <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                    Cette vente a été signalée comme annulée par l&apos;organisateur.
+                  </span>
                 )}
               </div>
             </div>

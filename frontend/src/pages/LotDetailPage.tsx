@@ -53,8 +53,25 @@ export default function LotDetailPage() {
   const [showCreateAlert, setShowCreateAlert] = useState(false)
 
   // Alert form
-  const [alertType, setAlertType] = useState<'price_drop' | 'price_below' | 'any_change'>('price_drop')
+  const [alertType, setAlertType] = useState<'price_drop' | 'price_below' | 'any_change'>('any_change')
   const [targetPrice, setTargetPrice] = useState<string>('')
+  const alertTypeOptions = [
+    {
+      value: 'any_change',
+      label: 'Nouvelle enchère ou mise à jour',
+      helper: 'Soyez prévenu dès qu\'une enchère progresse ou qu\'un détail est modifié.'
+    },
+    {
+      value: 'price_below',
+      label: 'Prix sous mon budget cible',
+      helper: 'Fixez un seuil et recevez une alerte tant que le lot reste abordable.'
+    },
+    {
+      value: 'price_drop',
+      label: 'Prix revu à la baisse',
+      helper: 'Idéal pour les ventes dégressives ou les remises exceptionnelles.'
+    }
+  ] as const
 
   useEffect(() => {
     if (id) {
@@ -75,6 +92,12 @@ export default function LotDetailPage() {
       }
     }
   }, [id])
+
+  useEffect(() => {
+    if (alertType !== 'price_below') {
+      setTargetPrice('')
+    }
+  }, [alertType])
 
   const fetchLotDetails = async () => {
     try {
@@ -140,11 +163,16 @@ export default function LotDetailPage() {
       return
     }
 
+    if (alertType === 'price_below' && !targetPrice) {
+      toast.error('Indiquez votre budget cible pour cette alerte')
+      return
+    }
+
     try {
       await api.post('/alerts', {
         lot_id: lot.id,
         alert_type: alertType,
-        target_price: targetPrice ? Number(targetPrice) : null
+        target_price: alertType === 'price_below' && targetPrice ? Number(targetPrice) : null
       })
       toast.success('Alerte créée avec succès')
       setShowCreateAlert(false)
@@ -257,19 +285,24 @@ export default function LotDetailPage() {
               </label>
               <select
                 value={alertType}
-                onChange={(e) => setAlertType(e.target.value as any)}
+                onChange={(e) => setAlertType(e.target.value as 'price_drop' | 'price_below' | 'any_change')}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                <option value="price_drop">Baisse de prix</option>
-                <option value="price_below">Prix sous un seuil</option>
-                <option value="any_change">Tout changement</option>
+                {alertTypeOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {alertTypeOptions.find(option => option.value === alertType)?.helper}
+              </p>
             </div>
 
             {alertType === 'price_below' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Prix cible (€)
+                  Budget cible (€)
                 </label>
                 <input
                   type="number"
