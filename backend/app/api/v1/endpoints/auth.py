@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,6 +11,8 @@ from app.core.security import (
     create_refresh_token,
     get_current_active_user
 )
+from app.core.rate_limit import check_rate_limit
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
@@ -18,8 +20,52 @@ from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
 router = APIRouter()
 
 
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
+    """Set httpOnly cookies for authentication tokens"""
+    # Access token cookie (short-lived)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/"
+    )
+
+    # Refresh token cookie (long-lived)
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/"
+    )
+
+
+def clear_auth_cookies(response: Response):
+    """Clear authentication cookies"""
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/")
+
+
+async def auth_rate_limit(request: Request):
+    """Rate limit dependency for auth endpoints"""
+    await check_rate_limit(
+        request,
+        max_requests=settings.AUTH_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60
+    )
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(auth_rate_limit)
+):
     """Register a new user"""
     # Check if email already exists
     result = await db.execute(select(User).where(User.email == user_data.email))
@@ -53,10 +99,12 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(auth_rate_limit)
 ):
-    """Login with email and password"""
+    """Login with email and password - Sets httpOnly cookies"""
     # Find user by email (using username field from OAuth2 form)
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
@@ -82,6 +130,10 @@ async def login(
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
+    # Set httpOnly cookies
+    set_auth_cookies(response, access_token, refresh_token)
+
+    # Also return in response body for backward compatibility
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -90,10 +142,16 @@ async def login(
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(current_user: User = Depends(get_current_active_user)):
-    """Refresh access token"""
+async def refresh_token(
+    response: Response,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Refresh access token - Sets httpOnly cookies"""
     access_token = create_access_token(data={"sub": str(current_user.id)})
     refresh_token = create_refresh_token(data={"sub": str(current_user.id)})
+
+    # Set httpOnly cookies
+    set_auth_cookies(response, access_token, refresh_token)
 
     return {
         "access_token": access_token,
@@ -109,6 +167,10 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
 
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_active_user)):
-    """Logout (client should delete token)"""
+async def logout(
+    response: Response,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Logout - Clears httpOnly cookies"""
+    clear_auth_cookies(response)
     return {"message": "Successfully logged out"}

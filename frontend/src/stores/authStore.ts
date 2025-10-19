@@ -17,7 +17,7 @@ interface AuthState {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, username: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   checkAuth: () => Promise<void>
 }
 
@@ -35,8 +35,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       headers: { 'Content-Type': 'multipart/form-data' },
     })
 
-    localStorage.setItem('access_token', data.access_token)
-    localStorage.setItem('refresh_token', data.refresh_token)
+    // Tokens are now in httpOnly cookies set by backend
+    // Keep localStorage for backward compatibility (optional)
+    // The cookies will take precedence on the backend side
 
     const userResponse = await api.get('/auth/me')
     set({ user: userResponse.data, isAuthenticated: true })
@@ -46,23 +47,31 @@ export const useAuthStore = create<AuthState>((set) => ({
     await api.post('/auth/register', { email, username, password })
   },
 
-  logout: () => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    set({ user: null, isAuthenticated: false })
+  logout: async () => {
+    try {
+      // Call backend to clear httpOnly cookies
+      await api.post('/auth/logout')
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      // Clear localStorage (if any)
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      set({ user: null, isAuthenticated: false })
+      window.location.href = '/login'
+    }
   },
 
   checkAuth: async () => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      set({ isAuthenticated: false, user: null })
-      return
-    }
-
+    // With httpOnly cookies, we always try to check auth
+    // The cookies will be sent automatically with the request
     try {
       const { data } = await api.get('/auth/me')
       set({ user: data, isAuthenticated: true })
-    } catch {
+    } catch (error) {
+      // If auth fails, clear everything
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
       set({ isAuthenticated: false, user: null })
     }
   },

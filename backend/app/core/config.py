@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 from functools import lru_cache
+import secrets
 
 
 class Settings(BaseSettings):
@@ -20,8 +21,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@db:5432/encheres"
     DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@db:5432/encheres"
 
-    # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production-make-it-very-long-and-random"
+    # Security - CRITICAL: Must be set in environment variables!
+    SECRET_KEY: str = secrets.token_urlsafe(32)  # Generate secure key if not provided
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -32,13 +33,17 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
 
-    # CORS
+    # CORS - Restricted to specific origins
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173"
     ]
+
+    # Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = 60
+    AUTH_RATE_LIMIT_PER_MINUTE: int = 5
 
     # Email
     MAIL_USERNAME: str = "noreply@encheres.com"
@@ -67,9 +72,24 @@ class Settings(BaseSettings):
     DEFAULT_PAGE_SIZE: int = 50
     MAX_PAGE_SIZE: int = 10000
 
+    # Database Pool
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_RECYCLE: int = 3600
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Validate critical settings
+        if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            import logging
+            logging.warning("SECRET_KEY is not set or too short. Using generated key. SET THIS IN PRODUCTION!")
+        if self.DEBUG:
+            import logging
+            logging.warning("DEBUG mode is ON. Disable in production!")
 
 
 @lru_cache()

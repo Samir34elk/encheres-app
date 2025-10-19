@@ -18,7 +18,12 @@
       "Bash(docker-compose logs backend --tail 50)",
       "Bash(journalctl --user-unit docker -n 50)",
       "Bash(curl -s \"http://localhost:8000/api/v1/sales?page=1&size=5\")",
-      "Bash(curl -s -I http://localhost:5173)"
+      "Bash(curl -s -I http://localhost:5173)",
+      "Bash(venv_test/bin/pip install -r requirements.txt)",
+      "Bash(venv_test/bin/pip install -r requirements-test.txt)",
+      "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v --tb=short)",
+      "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v tests/test_lots.py::test_get_lots --tb=short)",
+      "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v tests/test_lots.py::test_get_lots --tb=short -s)"
     ],
     "deny": [],
     "ask": []
