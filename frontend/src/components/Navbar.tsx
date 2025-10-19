@@ -35,59 +35,63 @@ export default function Navbar() {
           </Link>
 
           <div className="flex flex-1 items-center justify-end gap-2 sm:gap-4">
-            <div className="flex md:hidden items-center gap-1">
-              {[...publicLinks].map(({ to, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    className={({ isActive }) =>
-                      [
-                        'inline-flex items-center rounded-full px-3 py-2 text-xs font-medium transition-colors',
-                        isActive
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                      ].join(' ')
-                    }
-                  >
-                    {label}
-                  </NavLink>
-                ))}
-            </div>
+            {isAuthenticated && (
+              <>
+                <div className="flex md:hidden items-center gap-1">
+                  {[...publicLinks, ...privateLinks].map(({ to, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={({ isActive }) =>
+                        [
+                          'inline-flex items-center rounded-full px-3 py-2 text-xs font-medium transition-colors',
+                          isActive
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                        ].join(' ')
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
 
-            <div className="hidden md:flex items-center gap-1 lg:gap-2">
-              {[...publicLinks, ...(isAuthenticated ? privateLinks : [])].map(({ to, label, icon: Icon }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    [
-                      'inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary-50 text-primary-700 border border-primary-100 dark:bg-primary-900/30 dark:text-primary-200 dark:border-primary-800/70'
-                        : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-primary-200 dark:hover:bg-gray-800'
-                    ].join(' ')
-                  }
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{label}</span>
-                </NavLink>
-              ))}
-              {isAuthenticated && user?.is_admin && (
-                <NavLink
-                  to="/admin"
-                  className={({ isActive }) =>
-                    [
-                      'inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-500/40'
-                        : 'text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-300 dark:hover:text-amber-200 dark:hover:bg-amber-500/10'
-                    ].join(' ')
-                  }
-                >
-                  Espace admin
-                </NavLink>
-              )}
-            </div>
+                <div className="hidden md:flex items-center gap-1 lg:gap-2">
+                  {[...publicLinks, ...privateLinks].map(({ to, label, icon: Icon }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={({ isActive }) =>
+                        [
+                          'inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-primary-50 text-primary-700 border border-primary-100 dark:bg-primary-900/30 dark:text-primary-200 dark:border-primary-800/70'
+                            : 'text-gray-600 hover:text-primary-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-primary-200 dark:hover:bg-gray-800'
+                        ].join(' ')
+                      }
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{label}</span>
+                    </NavLink>
+                  ))}
+                  {user?.is_admin && (
+                    <NavLink
+                      to="/admin"
+                      className={({ isActive }) =>
+                        [
+                          'inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-500/40'
+                            : 'text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-300 dark:hover:text-amber-200 dark:hover:bg-amber-500/10'
+                        ].join(' ')
+                      }
+                    >
+                      Espace admin
+                    </NavLink>
+                  )}
+                </div>
+              </>
+            )}
 
             {isAuthenticated ? (
               <div className="flex items-center gap-2">

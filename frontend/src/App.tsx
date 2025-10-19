@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
@@ -25,7 +25,7 @@ import AdminRoute from './components/AdminRoute'
 
 function App() {
   const { theme } = useThemeStore()
-  const { checkAuth } = useAuthStore()
+  const { checkAuth, isAuthenticated } = useAuthStore()
 
   useEffect(() => {
     // Check authentication on mount
@@ -42,29 +42,38 @@ function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="login" element={<LoginPage />} />
-          <Route path="register" element={<RegisterPage />} />
-          <Route path="sales" element={<SalesPage />} />
-          <Route path="sales/:saleNumber" element={<SaleDetailPage />} />
-          <Route path="lots" element={<LotsPage />} />
-          <Route path="lots/:id" element={<LotDetailPage />} />
+        {isAuthenticated ? (
+          <Route path="/" element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="login" element={<Navigate to="/" replace />} />
+            <Route path="register" element={<Navigate to="/" replace />} />
+            <Route path="sales" element={<SalesPage />} />
+            <Route path="sales/:saleNumber" element={<SaleDetailPage />} />
+            <Route path="lots" element={<LotsPage />} />
+            <Route path="lots/:id" element={<LotDetailPage />} />
 
-          {/* Protected routes */}
-          <Route element={<PrivateRoute />}>
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="favorites" element={<FavoritesPage />} />
-            <Route path="alerts" element={<AlertsPage />} />
+            {/* Protected routes */}
+            <Route element={<PrivateRoute />}>
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="favorites" element={<FavoritesPage />} />
+              <Route path="alerts" element={<AlertsPage />} />
+            </Route>
+
+            {/* Admin routes */}
+            <Route element={<AdminRoute />}>
+              <Route path="admin" element={<AdminPage />} />
+            </Route>
+
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
-
-          {/* Admin routes */}
-          <Route element={<AdminRoute />}>
-            <Route path="admin" element={<AdminPage />} />
+        ) : (
+          <Route path="/" element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="login" element={<LoginPage />} />
+            <Route path="register" element={<RegisterPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
+        )}
       </Routes>
       <Toaster position="top-right" />
     </>

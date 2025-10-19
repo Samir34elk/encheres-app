@@ -312,7 +312,7 @@ export default function LotsPage() {
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="group flex items-center gap-0 rounded-full border border-gray-200 bg-white px-2 py-1 shadow-sm transition-all duration-500 ease-out hover:shadow-lg dark:border-gray-700 dark:bg-gray-800 md:gap-3">
+          <div className="group flex items-center gap-0 rounded-full border border-gray-200 bg-white px-2 py-1 shadow-sm transition-all duration-700 ease-in-out hover:shadow-lg dark:border-gray-700 dark:bg-gray-800 md:gap-3">
             <div className="flex items-center gap-0 group-hover:gap-2">
               {displayOptions.map(option => {
                 const isActive = displayLimit === option
@@ -325,7 +325,7 @@ export default function LotsPage() {
                       setDisplayLimit(option)
                       setDisplayPage(1)
                     }}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-all duration-400 ease-out ${
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-all duration-700 ease-in-out ${
                       isActive
                         ? 'inline-flex bg-primary-600 text-white shadow-sm'
                         : 'hidden group-hover:inline-flex text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
