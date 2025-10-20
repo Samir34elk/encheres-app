@@ -248,6 +248,17 @@ async def debug_scraper():
 
             # Navigate to the page
             await page.goto(debug_info["url"], wait_until="networkidle", timeout=30000)
+
+            # Wait for JavaScript to render content
+            try:
+                await page.wait_for_selector(
+                    "div.fr-list-product__item, div.fr-card, article, div[class*='product'], div[class*='vente']",
+                    timeout=10000
+                )
+            except Exception:
+                import asyncio
+                await asyncio.sleep(3)  # Fallback delay if selectors not found
+
             html = await page.content()
             await browser.close()
 
