@@ -635,15 +635,50 @@ export default function LotsPage() {
               </tbody>
             </table>
           </div>
-          <div className="md:hidden px-4 py-4 space-y-4">
-            {paginatedLots.map((lot) => (
-              <LotCard
-                key={lot.id}
-                lot={lot}
-                isFavorite={favorites.has(lot.id)}
-                onToggleFavorite={toggleFavorite}
-              />
-            ))}
+          <div className="md:hidden">
+            {/* Mobile Sort Bar */}
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                Trier par
+              </label>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {([
+                  { field: 'price' as SortField, label: 'Prix' },
+                  { field: 'lot_number' as SortField, label: 'N° Lot' },
+                  { field: 'title' as SortField, label: 'Titre' },
+                  { field: 'status' as SortField, label: 'Statut' },
+                  { field: 'depot_location' as SortField, label: 'Lieu' }
+                ]).map(({ field, label }) => {
+                  const isActive = sortField === field
+                  return (
+                    <button
+                      key={field}
+                      onClick={() => handleSort(field)}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                        isActive
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+                      }`}
+                    >
+                      {label}
+                      {isActive && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="px-4 py-4 space-y-4">
+              {paginatedLots.map((lot) => (
+                <LotCard
+                  key={lot.id}
+                  lot={lot}
+                  isFavorite={favorites.has(lot.id)}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300 md:flex-row md:items-center md:justify-between">
@@ -869,7 +904,7 @@ function LotCard({
           <img
             src={lot.image_url}
             alt={lot.title}
-            className="h-48 w-full object-cover"
+            className="h-24 w-full object-cover"
             loading="lazy"
             onError={(e) => {
               e.currentTarget.style.display = 'none'
@@ -892,11 +927,6 @@ function LotCard({
               {lot.depot_location}
             </p>
           </div>
-        )}
-        {lot.description && lot.description !== 'N/A' && (
-          <p className="text-sm text-gray-600 dark:text-gray-400 max-h-24 overflow-hidden">
-            {lot.description}
-          </p>
         )}
       </div>
 
