@@ -47,16 +47,38 @@ export default function LotsPage() {
   const [salesMetadata, setSalesMetadata] = useState<Record<number, { title: string; saleNumber: number; tags: string[] }>>({})
   const [loadingSalesMetadata, setLoadingSalesMetadata] = useState(false)
 
-  // Load favorites from localStorage
+  // Load favorites from backend (if authenticated) and merge with localStorage
   useEffect(() => {
-    const stored = localStorage.getItem('auctionFavorites')
-    if (stored) {
+    const loadFavorites = async () => {
+      // Load localStorage favorites first
+      const stored = localStorage.getItem('auctionFavorites')
+      let localFavorites = new Set<number>()
+      if (stored) {
+        try {
+          localFavorites = new Set(JSON.parse(stored))
+        } catch (e) {
+          console.error('Failed to parse favorites:', e)
+        }
+      }
+
+      // Try to load from backend if authenticated
       try {
-        setFavorites(new Set(JSON.parse(stored)))
-      } catch (e) {
-        console.error('Failed to parse favorites:', e)
+        const { data } = await api.get('/favorites', {
+          headers: { 'X-Skip-Auth-Redirect': 'true' }
+        })
+        // Merge backend favorites with local ones
+        const backendFavoriteIds = data.items.map((item: any) => item.lot_id)
+        const mergedFavorites = new Set([...localFavorites, ...backendFavoriteIds])
+        setFavorites(mergedFavorites)
+        // Update localStorage with merged favorites
+        localStorage.setItem('auctionFavorites', JSON.stringify(Array.from(mergedFavorites)))
+      } catch (error) {
+        // If not authenticated or error, just use local favorites
+        setFavorites(localFavorites)
       }
     }
+
+    loadFavorites()
   }, [])
 
   // Fetch all lots
@@ -725,12 +747,18 @@ function TableRow({
     <tr className="hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-colors group">
       {/* Favorite */}
       <td className="px-3 py-2 text-center">
-        <input
-          type="checkbox"
-          checked={isFavorite}
-          onChange={() => onToggleFavorite(lot.id)}
-          className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
-        />
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(lot.id)}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+            isFavorite
+              ? 'border-pink-200 bg-pink-50 text-pink-600 dark:border-pink-500/40 dark:bg-pink-500/10 dark:text-pink-200'
+              : 'border-gray-200 bg-white text-gray-400 hover:text-pink-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+          }`}
+          aria-label={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+        >
+          <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
+        </button>
       </td>
 
       {/* Title with Tooltip */}
