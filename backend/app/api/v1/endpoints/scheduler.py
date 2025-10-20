@@ -144,3 +144,78 @@ async def get_jobs_status(
         ],
         "note": "Job history tracking not yet implemented"
     }
+
+
+@router.get("/diagnostic")
+async def diagnostic(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Diagnostic endpoint to check scraper configuration and environment.
+    Returns information about the system, Playwright, and site accessibility.
+    """
+    import sys
+    import platform
+    from sqlalchemy import select, func
+    from app.models.sale import Sale
+
+    diagnostic_info = {
+        "system": {
+            "platform": platform.platform(),
+            "python_version": sys.version,
+        },
+        "configuration": {
+            "auction_base_url": settings.AUCTION_BASE_URL,
+            "scraper_interval_minutes": settings.SCRAPER_INTERVAL_MINUTES,
+            "sale_refresh_hours": settings.SALE_REFRESH_HOURS,
+        },
+        "database": {},
+        "playwright": {},
+        "recommendations": []
+    }
+
+    # Check database sales count
+    try:
+        result = await db.execute(select(func.count(Sale.id)))
+        sales_count = result.scalar_one()
+        diagnostic_info["database"]["sales_count"] = sales_count
+        diagnostic_info["database"]["status"] = "connected"
+    except Exception as e:
+        diagnostic_info["database"]["status"] = "error"
+        diagnostic_info["database"]["error"] = str(e)
+
+    # Check Playwright installation
+    try:
+        from playwright.async_api import async_playwright
+        diagnostic_info["playwright"]["installed"] = True
+
+        # Try to get browser info
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                version = browser.version
+                await browser.close()
+                diagnostic_info["playwright"]["chromium_version"] = version
+                diagnostic_info["playwright"]["status"] = "available"
+        except Exception as e:
+            diagnostic_info["playwright"]["status"] = "installed_but_not_functional"
+            diagnostic_info["playwright"]["error"] = str(e)
+            diagnostic_info["recommendations"].append(
+                "Playwright is installed but cannot launch browser. "
+                "On Render, you may need to install system dependencies. "
+                "Add 'playwright install-deps chromium' to your build script."
+            )
+    except ImportError:
+        diagnostic_info["playwright"]["installed"] = False
+        diagnostic_info["playwright"]["status"] = "not_installed"
+        diagnostic_info["recommendations"].append(
+            "Playwright is not installed. Install it with: pip install playwright"
+        )
+
+    # Recommendations based on findings
+    if diagnostic_info["database"].get("sales_count", 0) == 0:
+        diagnostic_info["recommendations"].append(
+            "Database has 0 sales. Run the discovery job first to populate sales."
+        )
+
+    return diagnostic_info
