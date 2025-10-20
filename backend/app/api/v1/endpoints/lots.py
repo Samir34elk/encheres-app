@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, desc, asc
 from sqlalchemy.orm import selectinload
 from typing import Optional, List, Annotated
-from pydantic import Field
+from pydantic import Field, BaseModel
+from datetime import datetime
 import math
 
 from app.db.session import get_db
@@ -17,6 +18,21 @@ from app.models.price_history import PriceHistory
 from app.schemas.lot import LotResponse, LotListResponse, LotWithFavorite, PriceHistoryResponse
 
 router = APIRouter()
+
+
+class PriceUpdate(BaseModel):
+    """Schema for price update from GitHub Actions"""
+    price: int
+    status: Optional[str] = None
+
+
+async def verify_cron_secret(x_cron_secret: str = Header(None)):
+    """Verify the cron secret header for GitHub Actions"""
+    cron_secret = getattr(settings, 'CRON_SECRET', None)
+    if not cron_secret:
+        raise HTTPException(status_code=500, detail="CRON_SECRET not configured")
+    if not x_cron_secret or x_cron_secret != cron_secret:
+        raise HTTPException(status_code=401, detail="Invalid or missing cron secret")
 
 
 @router.get("", response_model=LotListResponse)
@@ -209,3 +225,53 @@ async def get_lot_price_history(
     history = history_result.scalars().all()
 
     return [PriceHistoryResponse.model_validate(h) for h in history]
+
+
+@router.patch("/{lot_id}/price")
+async def update_lot_price(
+    lot_id: int,
+    price_update: PriceUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_cron_secret)
+):
+    """
+    Update a lot's price from GitHub Actions scraping.
+    Records price history if changed.
+    Requires CRON_SECRET header.
+    """
+    result = await db.execute(select(Lot).where(Lot.id == lot_id))
+    lot = result.scalar_one_or_none()
+
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+
+    old_price = lot.price
+    new_price = price_update.price
+
+    # Update price
+    lot.price = new_price
+    lot.last_updated = datetime.utcnow()
+
+    # Update status if provided
+    if price_update.status:
+        lot.status = price_update.status
+
+    # Record price history if price changed
+    if old_price != new_price:
+        price_history = PriceHistory(
+            lot_id=lot_id,
+            price=new_price,
+            status=price_update.status or lot.status,
+            recorded_at=datetime.utcnow()
+        )
+        db.add(price_history)
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "lot_id": lot_id,
+        "old_price": old_price,
+        "new_price": new_price,
+        "price_changed": old_price != new_price
+    }
