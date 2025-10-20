@@ -50,17 +50,13 @@ services:
       - key: DB_POOL_RECYCLE
         value: 3600
 
-  # Frontend Web Service (Express server for SPA routing)
+  # Frontend Static Site (with 404.html fallback for SPA routing)
   - type: web
     name: encheres-frontend
-    env: node
-    region: frankfurt
-    plan: free
+    env: static
     buildCommand: cd frontend && npm install && npm run build
-    startCommand: cd frontend && npm start
-    healthCheckPath: /
+    staticPublishPath: ./frontend/dist
+    pullRequestPreviewsEnabled: true
     envVars:
       - key: VITE_API_URL
         value: https://encheres-backend.onrender.com/api/v1
-      - key: NODE_ENV
-        value: production
