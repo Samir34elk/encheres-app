@@ -935,7 +935,10 @@ function LotCard({
   onToggleFavorite: (id: number) => void
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <Link
+      to={`/lots/${lot.id}`}
+      className="block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 hover:shadow-md hover:border-primary-300 dark:hover:border-primary-600 transition-all"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -948,16 +951,17 @@ function LotCard({
               </span>
             )}
           </div>
-          <Link
-            to={`/lots/${lot.id}`}
-            className="mt-2 block text-base font-semibold text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-          >
+          <h3 className="mt-2 text-base font-semibold text-gray-900 dark:text-white">
             {lot.title}
-          </Link>
+          </h3>
         </div>
         <button
           type="button"
-          onClick={() => onToggleFavorite(lot.id)}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggleFavorite(lot.id)
+          }}
           className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
             isFavorite
               ? 'border-pink-200 bg-pink-50 text-pink-600 dark:border-pink-500/40 dark:bg-pink-500/10 dark:text-pink-200'
@@ -1018,6 +1022,7 @@ function LotCard({
             href={lot.url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-200 dark:hover:bg-primary-500/20"
           >
             <ExternalLink className="h-4 w-4" />
@@ -1029,12 +1034,13 @@ function LotCard({
             href={lot.image_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             Image HD
           </a>
         )}
       </div>
-    </div>
+    </Link>
   )
 }
