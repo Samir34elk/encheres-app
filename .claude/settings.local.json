@@ -23,7 +23,20 @@
       "Bash(venv_test/bin/pip install -r requirements-test.txt)",
       "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v --tb=short)",
       "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v tests/test_lots.py::test_get_lots --tb=short)",
-      "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v tests/test_lots.py::test_get_lots --tb=short -s)"
+      "Bash(PYTHONPATH=/home/samir/Bureau/Projet_encheres/backend:$PYTHONPATH venv_test/bin/pytest -v tests/test_lots.py::test_get_lots --tb=short -s)",
+      "mcp__render__get_selected_workspace",
+      "mcp__render__list_services",
+      "mcp__render__list_workspaces",
+      "mcp__render__list_deploys",
+      "mcp__render__get_deploy",
+      "mcp__render__list_logs",
+      "Bash(git add backend/app/core/config.py)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: Convert DATABASE_URL to use asyncpg driver for SQLAlchemy async\n\n- Automatically convert postgresql:// to postgresql+asyncpg:// in config\n- Fixes SQLAlchemy InvalidRequestError: asyncio requires async driver\n- Render provides DATABASE_URL as postgresql:// which defaults to psycopg2\n- This ensures asyncpg is used for async database operations\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push origin master)",
+      "Bash(git add backend/app/models/lot.py)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: Remove GIN trigram index requiring pg_trgm extension\n\n- Removed idx_lot_search GIN index using gin_trgm_ops operator\n- pg_trgm extension not available on Render free tier PostgreSQL\n- Fixes: ProgrammingError: operator class \"gin_trgm_ops\" does not exist\n- Standard indexes on title/description columns already exist\n- Full-text search can be re-enabled later with pg_trgm extension\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(curl -s -I \"https://encheres-domaine.gouv.fr/ventes\")",
+      "Bash(curl -s -L -A \"Mozilla/5.0\" \"https://encheres-domaine.gouv.fr/\")"
     ],
     "deny": [],
     "ask": []

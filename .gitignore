@@ -79,3 +79,4 @@ encheres.csv
 # Backup files
 *.bak
 *.backup
+CRON_SECRET.txt
