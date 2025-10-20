@@ -22,15 +22,20 @@ router = APIRouter()
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
     """Set httpOnly cookies for authentication tokens"""
+    secure_cookie = settings.COOKIE_SECURE
+    same_site = settings.COOKIE_SAMESITE
+    cookie_domain = settings.COOKIE_DOMAIN
+
     # Access token cookie (short-lived)
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=secure_cookie,
+        samesite=same_site,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        path="/"
+        path="/",
+        domain=cookie_domain
     )
 
     # Refresh token cookie (long-lived)
@@ -38,17 +43,26 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=secure_cookie,
+        samesite=same_site,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/"
+        path="/",
+        domain=cookie_domain
     )
 
 
 def clear_auth_cookies(response: Response):
     """Clear authentication cookies"""
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/")
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        domain=settings.COOKIE_DOMAIN
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/",
+        domain=settings.COOKIE_DOMAIN
+    )
 
 
 async def auth_rate_limit(request: Request):

@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
+    COOKIE_DOMAIN: Optional[str] = None
 
     # OAuth2
     GOOGLE_CLIENT_ID: Optional[str] = None
@@ -95,6 +98,17 @@ class Settings(BaseSettings):
         if self.DEBUG:
             import logging
             logging.warning("DEBUG mode is ON. Disable in production!")
+
+        # Normalize cookie SameSite setting
+        self.COOKIE_SAMESITE = (self.COOKIE_SAMESITE or "lax").lower()
+
+        # Adjust cookie settings in production
+        if not self.DEBUG:
+            # Ensure secure cookies by default when not in debug mode
+            self.COOKIE_SECURE = True
+            # SameSite must be 'none' for cross-site cookies when secure
+            if not self.COOKIE_SAMESITE or self.COOKIE_SAMESITE == "lax":
+                self.COOKIE_SAMESITE = "none"
 
 
 @lru_cache()
