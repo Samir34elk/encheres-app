@@ -338,4 +338,94 @@ curl https://encheres-backend.onrender.com/api/v1/scheduler/diagnostic
 ---
 
 **Créé le :** 2025-10-20
-**Mis à jour :** Après déploiement du diagnostic endpoint
+**Mis à jour :** 2025-10-20 - RÉSOLU ✅
+
+---
+
+## ✅ SOLUTION FINALE (20/10/2025)
+
+### Problème Réel
+
+Le diagnostic a révélé que Playwright **fonctionnait correctement** sur Render Free. Le vrai problème était :
+
+**Le site https://encheres-domaine.gouv.fr utilise un rendu JavaScript côté client (PWA/SPA)**
+
+Playwright chargeait le HTML initial avant que JavaScript n'ait le temps de :
+1. Faire les requêtes GraphQL vers l'API
+2. Rendre le contenu dynamiquement dans le DOM
+
+### Solution Implémentée
+
+Ajout de `wait_for_selector()` dans 3 fichiers :
+
+#### 1. `backend/app/services/sale_discovery.py` (ligne 177)
+```python
+await page.goto(url, wait_until="networkidle", timeout=30000)
+
+# Wait for JavaScript to render content
+try:
+    await page.wait_for_selector(
+        "div.fr-list-product__item, div.fr-card, article, div[class*='product'], div[class*='vente']",
+        timeout=10000
+    )
+except Exception:
+    import asyncio
+    await asyncio.sleep(3)  # Fallback delay
+
+html = await page.content()
+```
+
+#### 2. `backend/app/services/scraper.py` (ligne 77)
+```python
+await page.goto(url, wait_until="networkidle", timeout=30000)
+
+# Wait for JavaScript to render content
+try:
+    await page.wait_for_selector(
+        "ul.fr-list-product, div.fr-list-product__item, div.fr-card",
+        timeout=10000
+    )
+except Exception:
+    await asyncio.sleep(3)
+
+html = await page.content()
+```
+
+#### 3. `backend/app/api/v1/endpoints/scheduler.py` (ligne 252)
+Même fix dans l'endpoint de debug.
+
+### Résultats
+
+**Avant le fix :**
+- Discovery job : 0 ventes trouvées
+- Scraping job : 0 lots trouvés
+
+**Après le fix :**
+- ✅ Discovery job : **10 ventes créées**
+- ✅ Scraping job : En cours de test
+
+### Commits
+
+- `9936fa0` - fix: Wait for JavaScript rendering in sale discovery scraper
+- `da29937` - fix: Add JavaScript rendering wait to debug-scraper endpoint
+- `40659c0` - fix: Add JavaScript rendering wait to lot scraping
+- `28ca014` - feat: Add force-scrape-sale endpoint for testing
+
+### Leçon Apprise
+
+**Ne pas assumer que le problème vient de l'infrastructure** (Render Free, Playwright, dépendances).
+
+Le diagnostic méthodique a montré que :
+1. ✅ Playwright fonctionnait
+2. ✅ La page se chargeait (659 KB HTML)
+3. ❌ Les sélecteurs CSS ne trouvaient rien
+
+→ **Le contenu était rendu dynamiquement par JavaScript**
+
+La solution était donc simple : attendre que le JavaScript finisse de s'exécuter avant de parser le HTML.
+
+---
+
+**Statut :** ✅ RÉSOLU
+**Temps de résolution :** ~2 heures (diagnostic + fix)
+**Complexité réelle :** Faible (une fois le vrai problème identifié)
