@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_SECRET: Optional[str] = None
 
     # CORS - Restricted to specific origins
-    BACKEND_CORS_ORIGINS: List[str] = [
+    BACKEND_CORS_ORIGINS: List[str] | str = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
@@ -98,6 +98,14 @@ class Settings(BaseSettings):
         if self.DEBUG:
             import logging
             logging.warning("DEBUG mode is ON. Disable in production!")
+
+        # Normalize CORS origins if provided as comma-separated string
+        if isinstance(self.BACKEND_CORS_ORIGINS, str):
+            self.BACKEND_CORS_ORIGINS = [
+                origin.strip()
+                for origin in self.BACKEND_CORS_ORIGINS.split(",")
+                if origin.strip()
+            ]
 
         # Normalize cookie SameSite setting
         self.COOKIE_SAMESITE = (self.COOKIE_SAMESITE or "lax").lower()
