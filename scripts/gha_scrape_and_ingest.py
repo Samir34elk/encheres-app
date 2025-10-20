@@ -89,6 +89,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable verbose logging.",
     )
+    parser.add_argument(
+        "--export-sales",
+        help="Write discovered sale numbers to the specified JSON file.",
+    )
     return parser.parse_args()
 
 
@@ -440,6 +444,16 @@ def select_sale_numbers(args, summaries: List[SaleSummary], fallback: List[int])
     return fallback[: args.max_sales]
 
 
+def export_sale_numbers(path: str, summaries: Iterable[SaleSummary], limit: Optional[int]) -> None:
+    numbers = [summary.sale_number for summary in summaries]
+    if limit is not None and limit > 0:
+        numbers = numbers[:limit]
+    unique_numbers = list(dict.fromkeys(numbers))
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(unique_numbers, file)
+    logging.info("Exported %s sale number(s) to %s", len(unique_numbers), path)
+
+
 async def run() -> int:
     args = parse_args()
     setup_logging(args.verbose)
@@ -461,6 +475,8 @@ async def run() -> int:
             try:
                 if args.mode in {"discover", "both"}:
                     sale_summaries = await scrape_sale_directory(context, source_base, args.max_pages)
+                    if args.export_sales:
+                        export_sale_numbers(args.export_sales, sale_summaries, args.max_sales)
                     await post_sales_metadata(client, api_base, args.cron_secret, sale_summaries)
 
                     if args.mode == "discover":

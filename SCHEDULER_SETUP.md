@@ -137,12 +137,13 @@ Vous devriez voir :
 ### 6.1 Vérifier le workflow
 
 1. Allez dans l'onglet **Actions** du repository
-2. Le workflow "Scheduled Jobs" comporte deux jobs :
-   - **scrape-sales** : exécute `scripts/gha_scrape_and_ingest.py --mode scrape`
-   - **discover-sales** : exécute `scripts/gha_scrape_and_ingest.py --mode discover`
-3. Les jobs respectent le planning :
-   - Scraping : toutes les 15 minutes
-   - Discovery : tous les jours à 3h00 UTC
+2. Le workflow "Scheduled Jobs" se découpe désormais en :
+   - **prepare-sales** : recense les ventes actives, ingère les métadonnées et produit la matrice de ventes à traiter.
+   - **scrape-sales** : job matriciel (1 vente par runner) exécutant `scripts/gha_scrape_and_ingest.py --mode scrape --sale <n>`.
+   - **discover-sales** : balayage complet (plusieurs pages) lancé chaque nuit à 03:00 UTC.
+3. Le planning reste identique :
+   - Scraping matriciel toutes les 15 minutes (prepare + matrix)
+   - Découverte complète quotidienne à 3h00 UTC
 
 ### 6.2 Test manuel
 
