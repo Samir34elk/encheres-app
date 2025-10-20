@@ -16,6 +16,8 @@ from app.services.sale_discovery import SaleDiscoveryService
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+SCRAPER_DISABLED_MESSAGE = "Internal scraping is disabled. Use the ingestion workflow instead."
+
 
 async def verify_cron_secret(x_cron_secret: str = Header(None)):
     """Verify the cron secret header for security"""
@@ -51,6 +53,11 @@ async def trigger_scraping(
     Returns:
         Status and summary of the scraping job
     """
+    if not settings.ENABLE_INTERNAL_SCRAPER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=SCRAPER_DISABLED_MESSAGE,
+        )
     logger.info("Scraping job triggered via API endpoint")
 
     async with AsyncSessionLocal() as db:
@@ -87,6 +94,11 @@ async def trigger_discovery(
     Returns:
         Status and summary of the discovery job
     """
+    if not settings.ENABLE_INTERNAL_SCRAPER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=SCRAPER_DISABLED_MESSAGE,
+        )
     logger.info("Discovery job triggered via API endpoint")
 
     async with AsyncSessionLocal() as db:
@@ -130,6 +142,11 @@ async def force_scrape_sale(
     Returns:
         Status and details of the scraping operation
     """
+    if not settings.ENABLE_INTERNAL_SCRAPER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=SCRAPER_DISABLED_MESSAGE,
+        )
     from app.services.scraper import AuctionScraper
 
     logger.info(f"Force scraping sale #{sale_number} via API endpoint")
@@ -171,6 +188,11 @@ async def force_scrape_all(
     Returns:
         Status and summary of all scraping operations
     """
+    if not settings.ENABLE_INTERNAL_SCRAPER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=SCRAPER_DISABLED_MESSAGE,
+        )
     from app.models.sale import Sale
     from app.services.scraper import AuctionScraper
 

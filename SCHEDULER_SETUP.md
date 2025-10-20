@@ -4,9 +4,9 @@ Ce guide explique comment configurer les jobs planifiés pour contourner les lim
 
 ## 🎯 Objectif
 
-Sur le plan gratuit de Render, les instances web s'arrêtent après 15 minutes d'inactivité. Cela empêche les jobs planifiés internes (APScheduler) de s'exécuter de manière fiable.
+Sur le plan gratuit de Render, les instances web s'arrêtent après 15 minutes d'inactivité. Cela empêche les jobs planifiés internes (APScheduler) de s'exécuter de manière fiable et rend le scraping Playwright trop coûteux côté serveur.
 
-**Solution :** Utiliser GitHub Actions pour déclencher les jobs via des appels API externes.
+**Solution :** Déporter tout le scraping dans GitHub Actions. Un worker GitHub lance Playwright, collecte les données et les pousse vers l'API d'ingestion (`/api/v1/ingestion/*`). Le backend se contente d'ingérer les données déjà scrapées.
 
 ---
 
@@ -69,12 +69,13 @@ services:
 
 ### 4.1 Vérifier les fichiers
 
-Assurez-vous que ces fichiers existent :
+Les éléments clés du nouveau pipeline :
 
-- ✅ `backend/app/api/v1/endpoints/scheduler.py`
-- ✅ `backend/app/core/config.py` (avec `CRON_SECRET`)
-- ✅ `.github/workflows/scheduled-jobs.yml`
-- ✅ `frontend/public/_redirects`
+- ✅ `backend/app/api/v1/endpoints/ingestion.py` — endpoints d'ingestion sécurisés
+- ✅ `backend/app/services/ingestion.py` — services de mise à jour BD
+- ✅ `.github/workflows/scheduled-jobs.yml` — workflow GitHub Actions
+- ✅ `scripts/gha_scrape_and_ingest.py` — worker Playwright côté GitHub
+- ✅ `scripts/requirements-scraper.txt` — dépendances minimales
 
 ### 4.2 Commit et push
 
@@ -109,22 +110,25 @@ cd backend
 export CRON_SECRET="test-secret-for-local-dev"
 uvicorn app.main:app --reload
 
-# Dans un autre terminal, tester
-./scripts/test_scheduler.sh local test-secret-for-local-dev
+# Dans le dossier racine, créer un virtualenv puis lancer le worker
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r scripts/requirements-scraper.txt
+export API_BASE_URL="http://localhost:8000/api/v1"
+python scripts/gha_scrape_and_ingest.py --mode both --max-sales 2
 ```
 
 ### 5.2 Test en production
 
 ```bash
 # Remplacer YOUR_SECRET par votre vrai secret
-./scripts/test_scheduler.sh production YOUR_SECRET
+export CRON_SECRET="YOUR_SECRET"
+python scripts/gha_scrape_and_ingest.py --mode discover --max-pages 3 --api-base https://encheres-backend.onrender.com/api/v1
+python scripts/gha_scrape_and_ingest.py --mode scrape --max-sales 10 --api-base https://encheres-backend.onrender.com/api/v1
 ```
 
 Vous devriez voir :
-- ✅ Health check passed
-- ✅ Jobs status returned
-- ✅ Scraping job triggered successfully
-- ✅ Discovery job triggered successfully
+- ✅ Découverte des ventes poussée via `/ingestion/sales-metadata`
+- ✅ Lots ingérés via `/ingestion/sales`
 
 ---
 
@@ -132,18 +136,20 @@ Vous devriez voir :
 
 ### 6.1 Vérifier le workflow
 
-1. Allez dans l'onglet **Actions** de votre repository GitHub
-2. Vous devriez voir le workflow "Scheduled Jobs"
-3. Les jobs s'exécuteront automatiquement selon le planning :
-   - **Scraping :** Toutes les 15 minutes
-   - **Discovery :** Tous les jours à 3h00 UTC
+1. Allez dans l'onglet **Actions** du repository
+2. Le workflow "Scheduled Jobs" comporte deux jobs :
+   - **scrape-sales** : exécute `scripts/gha_scrape_and_ingest.py --mode scrape`
+   - **discover-sales** : exécute `scripts/gha_scrape_and_ingest.py --mode discover`
+3. Les jobs respectent le planning :
+   - Scraping : toutes les 15 minutes
+   - Discovery : tous les jours à 3h00 UTC
 
 ### 6.2 Test manuel
 
 1. Dans l'onglet **Actions**, cliquez sur "Scheduled Jobs"
 2. Cliquez sur **Run workflow**
-3. Sélectionnez le job à exécuter (scraping, discovery, ou both)
-4. Cliquez sur **Run workflow**
+3. Choisissez `scraping`, `discovery` ou `both`
+4. Le workflow lancera le script correspondant et poussera les données via les endpoints d'ingestion
 
 Vous verrez les logs en temps réel.
 
@@ -153,11 +159,10 @@ Vous verrez les logs en temps réel.
 
 ### Vérifier l'historique des jobs
 
-Allez dans **Actions** > **Scheduled Jobs** pour voir :
-- ✅ Quand les jobs se sont exécutés
-- ⏱️ Combien de temps ils ont pris
-- ❌ S'il y a eu des erreurs
-- 📊 Les détails de chaque exécution
+Allez dans **Actions** > **Scheduled Jobs** pour visualiser :
+- ✅ Les lancements du worker (Playwright + ingestion)
+- ⏱️ Le temps passé et la taille des payloads
+- ❌ Les erreurs éventuelles (secret manquant, parsing impossible, etc.)
 
 ### Vérifier les logs Render
 
@@ -180,18 +185,10 @@ curl https://encheres-backend.onrender.com/api/v1/scheduler/jobs-status
 
 ### Les jobs ne s'exécutent pas
 
-1. **Vérifier le secret GitHub :**
-   ```bash
-   # Dans Actions logs, vous verrez "Invalid or missing cron secret" si le secret est incorrect
-   ```
-
-2. **Vérifier la variable Render :**
-   - Dashboard > Service > Environment > CRON_SECRET doit être défini
-
-3. **Vérifier que l'instance Render est active :**
-   ```bash
-   curl https://encheres-backend.onrender.com/health
-   ```
+1. **Vérifier le secret GitHub :** les logs du workflow indiquent "Invalid or missing cron secret" si `CRON_SECRET` est absent.
+2. **Vérifier la variable Render :** `CRON_SECRET` doit être défini dans l'environnement Render.
+3. **Playerwright échoue à se lancer :** vérifiez que l'étape `python -m playwright install --with-deps chromium` passe bien (dépendances système).
+4. **Ingestion en erreur 503 :** le backend doit exposer `/api/v1/ingestion/*` (déployez la dernière version).
 
 ### Erreur 401 Unauthorized
 

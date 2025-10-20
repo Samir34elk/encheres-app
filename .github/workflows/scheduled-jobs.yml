@@ -37,40 +37,33 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Trigger Sales Scraping Job
-        id: scraping
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
         run: |
-          echo "Triggering scraping job..."
-          response=$(curl -X POST \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            -w "\n%{http_code}" \
-            -s \
-            "${{ env.BACKEND_URL }}/api/v1/scheduler/trigger-scraping")
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-scraper.txt
 
-          # Extract HTTP status code (last line)
-          http_code=$(echo "$response" | tail -n1)
-          # Extract response body (everything except last line)
-          body=$(echo "$response" | head -n-1)
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install --with-deps chromium
 
-          echo "HTTP Status: $http_code"
-          echo "Response: $body"
-
-          if [ "$http_code" -eq 200 ]; then
-            echo "✅ Scraping job completed successfully"
-            echo "response=$body" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "❌ Scraping job failed with status $http_code"
-            echo "Response: $body"
-            exit 1
-          fi
+      - name: Run scraping worker
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_BASE_URL: ${{ env.BACKEND_URL }}/api/v1
+        run: |
+          python scripts/gha_scrape_and_ingest.py --mode scrape --max-sales 10
 
       - name: Notify on Failure
         if: failure()
         run: |
-          echo "::error::Scraping job failed. Check the logs above."
-          # You can add webhook notifications here (Discord, Slack, etc.)
+          echo "::error::Scraping worker failed. Check the logs above for details."
 
   discover-sales:
     # Run this job only on the discovery schedule or manual trigger
@@ -81,40 +74,33 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Trigger Sales Discovery Job
-        id: discovery
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
         run: |
-          echo "Triggering discovery job..."
-          response=$(curl -X POST \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            -w "\n%{http_code}" \
-            -s \
-            "${{ env.BACKEND_URL }}/api/v1/scheduler/trigger-discovery")
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-scraper.txt
 
-          # Extract HTTP status code (last line)
-          http_code=$(echo "$response" | tail -n1)
-          # Extract response body (everything except last line)
-          body=$(echo "$response" | head -n-1)
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install --with-deps chromium
 
-          echo "HTTP Status: $http_code"
-          echo "Response: $body"
-
-          if [ "$http_code" -eq 200 ]; then
-            echo "✅ Discovery job completed successfully"
-            echo "response=$body" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "❌ Discovery job failed with status $http_code"
-            echo "Response: $body"
-            exit 1
-          fi
+      - name: Run discovery worker
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_BASE_URL: ${{ env.BACKEND_URL }}/api/v1
+        run: |
+          python scripts/gha_scrape_and_ingest.py --mode discover --max-pages 5
 
       - name: Notify on Failure
         if: failure()
         run: |
-          echo "::error::Discovery job failed. Check the logs above."
-          # You can add webhook notifications here (Discord, Slack, etc.)
+          echo "::error::Discovery worker failed. Check the logs above for details."
 
   # Optional: Health check to wake up the Render instance
   wake-up:

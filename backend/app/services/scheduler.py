@@ -48,6 +48,10 @@ class SchedulerService:
 
     def start(self):
         """Démarre le scheduler et enregistre les tâches."""
+        if not settings.ENABLE_INTERNAL_SCRAPER:
+            logger.info("Internal scheduler disabled via configuration. Skipping job registration.")
+            return
+
         # Scraping récurrent des ventes
         self.scheduler.add_job(
             self.scrape_sales_job,
@@ -71,5 +75,6 @@ class SchedulerService:
 
     def shutdown(self):
         """Arrête proprement le scheduler."""
-        self.scheduler.shutdown()
-        logger.info("Scheduler arrêté")
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Scheduler arrêté")
