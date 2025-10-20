@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     formData.append('username', email)
     formData.append('password', password)
 
-    const { data } = await api.post('/auth/login', formData, {
+    await api.post('/auth/login', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
 
