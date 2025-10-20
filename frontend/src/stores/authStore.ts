@@ -39,7 +39,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Keep localStorage for backward compatibility (optional)
     // The cookies will take precedence on the backend side
 
-    const userResponse = await api.get('/auth/me')
+    const userResponse = await api.get('/auth/me', {
+      headers: { 'X-Skip-Auth-Redirect': 'true' }
+    })
     set({ user: userResponse.data, isAuthenticated: true })
   },
 
@@ -66,7 +68,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     // With httpOnly cookies, we always try to check auth
     // The cookies will be sent automatically with the request
     try {
-      const { data } = await api.get('/auth/me')
+      const { data } = await api.get('/auth/me', {
+        headers: { 'X-Skip-Auth-Redirect': 'true' }
+      })
       set({ user: data, isAuthenticated: true })
     } catch (error) {
       // If auth fails, clear everything

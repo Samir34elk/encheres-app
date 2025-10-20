@@ -23,7 +23,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const headers = (error.config?.headers || {}) as Record<string, string>
+    const skipRedirect =
+      headers['X-Skip-Auth-Redirect'] === 'true' || headers['x-skip-auth-redirect'] === 'true'
+
+    if (error.response?.status === 401 && !skipRedirect) {
       // Clear localStorage tokens (if any)
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
