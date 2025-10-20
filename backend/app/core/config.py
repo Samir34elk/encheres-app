@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     AUCTION_BASE_URL: str = "https://encheres-domaine.gouv.fr"
     AUCTION_SALE_NUMBER: int = 42
     SALE_REFRESH_HOURS: int = 24
+    ENABLE_INTERNAL_SCRAPER: bool = False
 
     # Cron Jobs (for external triggers via GitHub Actions)
     CRON_SECRET: Optional[str] = None  # Must be set in production!

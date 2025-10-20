@@ -15,6 +15,7 @@ from app.models.alert import Alert
 from app.services.scraper import AuctionScraper
 from app.services.sale_discovery import SaleDiscoveryService
 from app.services.batch_scraper import BatchAuctionScraper
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -25,6 +26,13 @@ class ScrapeRequest(BaseModel):
 
 class ScrapeMultipleRequest(BaseModel):
     sale_numbers: List[int]
+
+def _ensure_internal_scraper_enabled():
+    if not settings.ENABLE_INTERNAL_SCRAPER:
+        raise HTTPException(
+            status_code=503,
+            detail="Internal scraping is disabled. Use the ingestion workflow instead.",
+        )
 
 
 @router.get("/stats", response_model=Dict[str, Any])
@@ -90,6 +98,7 @@ async def trigger_scrape(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Manually trigger auction scraping for a specific sale or default sale"""
+    _ensure_internal_scraper_enabled()
     scraper = AuctionScraper(db, sale_number=payload.sale_number)
     stats = await scraper.run()
 
@@ -107,6 +116,7 @@ async def trigger_multiple_scrapes(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Trigger scraping for multiple sales"""
+    _ensure_internal_scraper_enabled()
     results = []
 
     for sale_number in payload.sale_numbers:
@@ -201,6 +211,7 @@ async def scrape_all_sales(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Scrape toutes les ventes qui nécessitent une mise à jour."""
+    _ensure_internal_scraper_enabled()
     batch = BatchAuctionScraper(
         db,
         staleness_hours=staleness_hours or settings.SALE_REFRESH_HOURS,
