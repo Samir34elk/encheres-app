@@ -73,6 +73,16 @@ class AuctionScraper:
 
             try:
                 await page.goto(url, wait_until="networkidle", timeout=30000)
+
+                # Wait for JavaScript to render content (same fix as sale_discovery)
+                try:
+                    await page.wait_for_selector(
+                        "ul.fr-list-product, div.fr-list-product__item, div.fr-card",
+                        timeout=10000
+                    )
+                except Exception:
+                    await asyncio.sleep(3)  # Fallback delay if selectors not found
+
                 html = await page.content()
 
                 tree = HTMLParser(html)
