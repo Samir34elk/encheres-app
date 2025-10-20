@@ -19,7 +19,7 @@ export default function Navbar() {
 
   const privateLinks = [{ to: '/alerts', label: 'Mes alertes', icon: Bell }]
 
-  const navigationLinks = isAuthenticated ? [...publicLinks, ...privateLinks] : publicLinks
+  const navigationLinks = isAuthenticated ? [...publicLinks, ...privateLinks] : []
 
   useEffect(() => {
     setIsMenuOpen(false)
