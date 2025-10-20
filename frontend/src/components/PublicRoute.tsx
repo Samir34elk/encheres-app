@@ -2,14 +2,14 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import LoadingScreen from './LoadingScreen'
 
-export default function AdminRoute() {
-  const { user, isAuthenticated, hasCheckedAuth } = useAuthStore()
+export default function PublicRoute() {
+  const { isAuthenticated, hasCheckedAuth } = useAuthStore()
 
   if (!hasCheckedAuth) {
     return <LoadingScreen />
   }
 
-  if (!isAuthenticated || !user?.is_admin) {
+  if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
 

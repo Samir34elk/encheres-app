@@ -563,7 +563,7 @@ export default function LotsPage() {
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10 shadow-sm">
                 <tr>
@@ -635,6 +635,17 @@ export default function LotsPage() {
               </tbody>
             </table>
           </div>
+          <div className="md:hidden px-4 py-4 space-y-4">
+            {paginatedLots.map((lot) => (
+              <LotCard
+                key={lot.id}
+                lot={lot}
+                isFavorite={favorites.has(lot.id)}
+                onToggleFavorite={toggleFavorite}
+              />
+            ))}
+          </div>
+
           <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300 md:flex-row md:items-center md:justify-between">
             <span>
               Page {displayPage} sur {totalPages}
@@ -809,5 +820,109 @@ function TableRow({
         )}
       </td>
     </tr>
+  )
+}
+
+function LotCard({
+  lot,
+  isFavorite,
+  onToggleFavorite
+}: {
+  lot: Lot
+  isFavorite: boolean
+  onToggleFavorite: (id: number) => void
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-200">
+              Lot #{lot.lot_number}
+            </span>
+            {lot.status && (
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                {lot.status}
+              </span>
+            )}
+          </div>
+          <h3 className="mt-2 text-base font-semibold text-gray-900 dark:text-white">
+            {lot.title}
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(lot.id)}
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+            isFavorite
+              ? 'border-pink-200 bg-pink-50 text-pink-600 dark:border-pink-500/40 dark:bg-pink-500/10 dark:text-pink-200'
+              : 'border-gray-200 bg-white text-gray-400 hover:text-pink-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+          }`}
+          aria-label={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+        >
+          <Heart className={`h-5 w-5 ${isFavorite ? 'fill-current' : ''}`} />
+        </button>
+      </div>
+
+      {lot.image_url && (
+        <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+          <img
+            src={lot.image_url}
+            alt={lot.title}
+            className="h-48 w-full object-cover"
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        </div>
+      )}
+
+      <div className="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Prix</span>
+          <span className="font-semibold text-gray-900 dark:text-white">
+            {lot.price !== null ? `${lot.price.toLocaleString()} €` : 'N/A'}
+          </span>
+        </div>
+        {lot.depot_location && (
+          <div>
+            <span className="text-gray-500 dark:text-gray-400">Lieu de dépôt</span>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+              {lot.depot_location}
+            </p>
+          </div>
+        )}
+        {lot.description && lot.description !== 'N/A' && (
+          <p className="text-sm text-gray-600 dark:text-gray-400 max-h-24 overflow-hidden">
+            {lot.description}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {lot.url && (
+          <a
+            href={lot.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-200 dark:hover:bg-primary-500/20"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Voir le lot
+          </a>
+        )}
+        {lot.image_url && (
+          <a
+            href={lot.image_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Image HD
+          </a>
+        )}
+      </div>
+    </div>
   )
 }
