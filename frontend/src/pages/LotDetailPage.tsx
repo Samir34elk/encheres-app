@@ -27,6 +27,7 @@ interface Lot {
   url: string | null
   image_url: string | null
   sale_id: number | null
+  sale_end_date: string | null
   view_count: number
   favorite_count: number
   first_seen: string
@@ -488,6 +489,24 @@ export default function LotDetailPage() {
                   </span>
                   <span className="font-medium text-gray-900 dark:text-white text-right max-w-[60%]">
                     {lot.depot_location}
+                  </span>
+                </div>
+              )}
+
+              {lot.sale_end_date && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    Date de clôture
+                  </span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {new Date(lot.sale_end_date).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </span>
                 </div>
               )}

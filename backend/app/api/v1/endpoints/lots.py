@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, desc, asc
+from sqlalchemy.orm import selectinload
 from typing import Optional, List, Annotated
 from pydantic import Field
 import math
@@ -10,6 +11,7 @@ from app.core.config import settings
 from app.core.security import get_current_active_user
 from app.models.user import User
 from app.models.lot import Lot
+from app.models.sale import Sale
 from app.models.favorite import Favorite
 from app.models.price_history import PriceHistory
 from app.schemas.lot import LotResponse, LotListResponse, LotWithFavorite, PriceHistoryResponse
@@ -33,7 +35,8 @@ async def get_lots(
     db: AsyncSession = Depends(get_db)
 ):
     """Get paginated list of auction lots with filters"""
-    query = select(Lot)
+    # Eager load sale relationship to get end_date
+    query = select(Lot).options(selectinload(Lot.sale))
 
     # Filters
     if sale_id:
@@ -64,12 +67,17 @@ async def get_lots(
         query = query.where(Lot.status.ilike(f"%{status}%"))
 
     # Sorting
-    sort_column = {
-        "price": Lot.price,
-        "date": Lot.last_updated,
-        "lot_number": Lot.lot_number,
-        "popularity": Lot.favorite_count
-    }[sort_by]
+    if sort_by == "end_date":
+        # For sorting by end_date, we need to join Sale table
+        query = query.join(Sale, Lot.sale_id == Sale.id, isouter=True)
+        sort_column = Sale.end_date
+    else:
+        sort_column = {
+            "price": Lot.price,
+            "date": Lot.last_updated,
+            "lot_number": Lot.lot_number,
+            "popularity": Lot.favorite_count
+        }[sort_by]
 
     if order == "desc":
         query = query.order_by(desc(sort_column))
@@ -91,8 +99,28 @@ async def get_lots(
     result = await db.execute(query)
     lots = result.scalars().all()
 
-    # Transform SQLAlchemy objects to Pydantic
-    items = [LotResponse.model_validate(lot) for lot in lots]
+    # Transform SQLAlchemy objects to Pydantic with sale_end_date
+    items = []
+    for lot in lots:
+        lot_dict = {
+            "id": lot.id,
+            "lot_number": lot.lot_number,
+            "title": lot.title,
+            "description": lot.description,
+            "price": lot.price,
+            "status": lot.status,
+            "depot_location": lot.depot_location,
+            "url": lot.url,
+            "image_url": lot.image_url,
+            "sale_id": lot.sale_id,
+            "sale_end_date": lot.sale.end_date if lot.sale else None,
+            "first_seen": lot.first_seen,
+            "last_updated": lot.last_updated,
+            "is_active": lot.is_active,
+            "view_count": lot.view_count,
+            "favorite_count": lot.favorite_count
+        }
+        items.append(LotResponse(**lot_dict))
 
     return {
         "items": items,
@@ -110,7 +138,9 @@ async def get_lot(
     current_user: Optional[User] = Depends(get_current_active_user)
 ):
     """Get a specific lot by ID"""
-    result = await db.execute(select(Lot).where(Lot.id == lot_id))
+    result = await db.execute(
+        select(Lot).options(selectinload(Lot.sale)).where(Lot.id == lot_id)
+    )
     lot = result.scalar_one_or_none()
 
     if not lot:
@@ -120,10 +150,28 @@ async def get_lot(
     lot.view_count += 1
     await db.commit()
 
-    lot_data = LotWithFavorite.model_validate(lot)
-    lot_data.is_favorited = False
-    lot_data.user_tags = None
-    lot_data.user_notes = None
+    # Build lot data dict with sale_end_date
+    lot_dict = {
+        "id": lot.id,
+        "lot_number": lot.lot_number,
+        "title": lot.title,
+        "description": lot.description,
+        "price": lot.price,
+        "status": lot.status,
+        "depot_location": lot.depot_location,
+        "url": lot.url,
+        "image_url": lot.image_url,
+        "sale_id": lot.sale_id,
+        "sale_end_date": lot.sale.end_date if lot.sale else None,
+        "first_seen": lot.first_seen,
+        "last_updated": lot.last_updated,
+        "is_active": lot.is_active,
+        "view_count": lot.view_count,
+        "favorite_count": lot.favorite_count,
+        "is_favorited": False,
+        "user_tags": None,
+        "user_notes": None
+    }
 
     if current_user:
         fav_result = await db.execute(
@@ -134,11 +182,11 @@ async def get_lot(
         )
         favorite = fav_result.scalar_one_or_none()
         if favorite:
-            lot_data.is_favorited = True
-            lot_data.user_tags = favorite.tags
-            lot_data.user_notes = favorite.notes
+            lot_dict["is_favorited"] = True
+            lot_dict["user_tags"] = favorite.tags
+            lot_dict["user_notes"] = favorite.notes
 
-    return lot_data
+    return LotWithFavorite(**lot_dict)
 
 
 @router.get("/{lot_id}/price-history", response_model=List[PriceHistoryResponse])

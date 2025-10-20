@@ -35,6 +35,8 @@ class LotUpdate(BaseModel):
 class LotResponse(LotBase):
     """Lot response schema"""
     id: int
+    sale_id: Optional[int] = None
+    sale_end_date: Optional[datetime] = None
     first_seen: datetime
     last_updated: datetime
     is_active: int
