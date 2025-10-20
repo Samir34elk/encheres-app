@@ -22,22 +22,29 @@ import NotFoundPage from './pages/NotFoundPage'
 import Layout from './components/Layout'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
+import LoadingScreen from './components/LoadingScreen'
 
 function App() {
   const { theme } = useThemeStore()
-  const { checkAuth, isAuthenticated } = useAuthStore()
+  const { checkAuth, isAuthenticated, hasCheckedAuth } = useAuthStore()
 
   useEffect(() => {
-    // Check authentication on mount
-    checkAuth()
+    if (!hasCheckedAuth) {
+      checkAuth()
+    }
+  }, [checkAuth, hasCheckedAuth])
 
-    // Apply theme
+  useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark')
     } else {
       document.documentElement.classList.remove('dark')
     }
-  }, [theme, checkAuth])
+  }, [theme])
+
+  if (!hasCheckedAuth) {
+    return <LoadingScreen />
+  }
 
   return (
     <>

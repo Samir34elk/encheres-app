@@ -15,6 +15,7 @@ interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  hasCheckedAuth: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, username: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -25,6 +26,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
+  hasCheckedAuth: false,
 
   login: async (email, password) => {
     const formData = new FormData()
@@ -42,7 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const userResponse = await api.get('/auth/me', {
       headers: { 'X-Skip-Auth-Redirect': 'true' }
     })
-    set({ user: userResponse.data, isAuthenticated: true })
+    set({ user: userResponse.data, isAuthenticated: true, hasCheckedAuth: true })
   },
 
   register: async (email, username, password) => {
@@ -59,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Clear localStorage (if any)
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
-      set({ user: null, isAuthenticated: false })
+      set({ user: null, isAuthenticated: false, hasCheckedAuth: true })
       window.location.href = '/login'
     }
   },
@@ -68,15 +70,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     // With httpOnly cookies, we always try to check auth
     // The cookies will be sent automatically with the request
     try {
+      set({ isLoading: true })
       const { data } = await api.get('/auth/me', {
         headers: { 'X-Skip-Auth-Redirect': 'true' }
       })
-      set({ user: data, isAuthenticated: true })
+      set({ user: data, isAuthenticated: true, hasCheckedAuth: true, isLoading: false })
     } catch (error) {
       // If auth fails, clear everything
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
-      set({ isAuthenticated: false, user: null })
+      set({ isAuthenticated: false, user: null, hasCheckedAuth: true, isLoading: false })
     }
   },
 }))
