@@ -175,6 +175,20 @@ class SaleDiscoveryService:
 
                     url = f"{self.base_url}{self.list_path}?page={page_number}"
                     await page.goto(url, wait_until="networkidle", timeout=30000)
+
+                    # Wait for JavaScript to render content
+                    # Try to wait for common selectors, with a fallback delay
+                    try:
+                        # Wait for any of these selectors (whichever appears first)
+                        await page.wait_for_selector(
+                            "div.fr-list-product__item, div.fr-card, article, div[class*='product'], div[class*='vente']",
+                            timeout=10000
+                        )
+                    except Exception:
+                        # If no selector found, wait a bit for JS to finish
+                        import asyncio
+                        await asyncio.sleep(3)
+
                     html = await page.content()
                     tree = HTMLParser(html)
                     items = tree.css("div.fr-list-product__item")
