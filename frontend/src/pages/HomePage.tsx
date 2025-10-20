@@ -122,7 +122,7 @@ export default function HomePage() {
                 className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 transition-[color,background-color,transform] duration-700 ease-in-out ${
                   authMode === 'register'
                     ? 'bg-white text-primary-600 shadow-sm dark:bg-gray-900 dark:text-primary-300'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover-text-gray-200'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
               >
                 <UserPlus className="h-4 w-4" />
