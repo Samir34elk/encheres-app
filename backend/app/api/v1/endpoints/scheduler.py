@@ -114,6 +114,48 @@ async def trigger_discovery(
             )
 
 
+@router.post("/force-scrape-sale/{sale_number}")
+async def force_scrape_sale(
+    sale_number: int,
+    _: None = Depends(verify_cron_secret)
+):
+    """
+    Force scrape a specific sale, bypassing the staleness check.
+    Useful for testing or manual triggers.
+
+    Headers:
+        X-Cron-Secret: The secret key to authenticate the request
+
+    Returns:
+        Status and details of the scraping operation
+    """
+    from app.services.scraper import AuctionScraper
+
+    logger.info(f"Force scraping sale #{sale_number} via API endpoint")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            scraper = AuctionScraper(db, sale_number=sale_number)
+            stats = await scraper.run()
+
+            result = {
+                "status": "success",
+                "sale_number": sale_number,
+                "stats": stats,
+                "message": f"Sale {sale_number} scraped successfully"
+            }
+
+            logger.info(f"Force scrape completed: {result}")
+            return result
+
+        except Exception as e:
+            logger.exception(f"Error during force scrape of sale #{sale_number}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Scraping sale {sale_number} failed: {str(e)}"
+            )
+
+
 @router.get("/jobs-status")
 async def get_jobs_status(
     db: AsyncSession = Depends(get_db)
