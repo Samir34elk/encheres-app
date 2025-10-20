@@ -50,10 +50,10 @@ class AuctionDataIngestionService:
             if payload.url and payload.url != sale.url:
                 sale.url = payload.url
                 updated_fields["url"] = payload.url
-            if payload.start_date != sale.start_date:
+            if payload.start_date is not None and payload.start_date != sale.start_date:
                 sale.start_date = payload.start_date
                 updated_fields["start_date"] = payload.start_date
-            if payload.end_date != sale.end_date:
+            if payload.end_date is not None and payload.end_date != sale.end_date:
                 sale.end_date = payload.end_date
                 updated_fields["end_date"] = payload.end_date
         else:

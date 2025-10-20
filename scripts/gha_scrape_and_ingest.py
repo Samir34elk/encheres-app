@@ -344,18 +344,23 @@ async def scrape_sale(context, base_url: str, sale_number: int) -> Dict[str, Any
 def build_ingestion_payload(scraped_sale: Dict[str, Any]) -> Dict[str, Any]:
     metadata = scraped_sale["metadata"]
     lots = scraped_sale["lots"]
-    return {
+    payload = {
         "sale_number": metadata["sale_number"],
         "title": metadata.get("title"),
         "description": metadata.get("description"),
         "status": metadata.get("status"),
         "url": metadata.get("url"),
-        "start_date": None,
-        "end_date": None,
         "scraped_at": datetime.utcnow().isoformat(),
         "deactivate_missing": True,
         "lots": lots,
     }
+
+    if metadata.get("start_date"):
+        payload["start_date"] = metadata["start_date"]
+    if metadata.get("end_date"):
+        payload["end_date"] = metadata["end_date"]
+
+    return payload
 
 
 async def post_sales_metadata(
