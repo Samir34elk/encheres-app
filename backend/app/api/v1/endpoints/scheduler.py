@@ -5,6 +5,7 @@ Used by GitHub Actions or external cron services.
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 import logging
 
 from app.core.config import settings
@@ -153,6 +154,67 @@ async def force_scrape_sale(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Scraping sale {sale_number} failed: {str(e)}"
+            )
+
+
+@router.post("/force-scrape-all")
+async def force_scrape_all(
+    _: None = Depends(verify_cron_secret)
+):
+    """
+    Force scrape ALL sales regardless of staleness check.
+    Useful after fixing bugs or for bulk updates.
+
+    Headers:
+        X-Cron-Secret: The secret key to authenticate the request
+
+    Returns:
+        Status and summary of all scraping operations
+    """
+    from app.models.sale import Sale
+    from app.services.scraper import AuctionScraper
+
+    logger.info("Force scraping ALL sales via API endpoint")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            # Get all sales
+            result = await db.execute(select(Sale))
+            sales = result.scalars().all()
+
+            summary = {
+                "status": "success",
+                "total_sales": len(sales),
+                "processed": 0,
+                "success": 0,
+                "failed": 0,
+                "details": []
+            }
+
+            for sale in sales:
+                summary["processed"] += 1
+                logger.info(f"Force scraping sale #{sale.sale_number}")
+
+                try:
+                    scraper = AuctionScraper(db, sale_number=sale.sale_number)
+                    stats = await scraper.run()
+                    summary["success"] += 1
+                    summary["details"].append({
+                        "sale_number": sale.sale_number,
+                        "stats": stats
+                    })
+                except Exception as e:
+                    logger.exception(f"Error scraping sale #{sale.sale_number}: {e}")
+                    summary["failed"] += 1
+
+            logger.info(f"Force scrape all completed: {summary}")
+            return summary
+
+        except Exception as e:
+            logger.exception(f"Error during force scrape all: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Force scrape all failed: {str(e)}"
             )
 
 
