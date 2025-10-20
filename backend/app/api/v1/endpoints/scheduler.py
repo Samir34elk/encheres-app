@@ -219,3 +219,84 @@ async def diagnostic(
         )
 
     return diagnostic_info
+
+
+@router.get("/debug-scraper")
+async def debug_scraper():
+    """
+    Debug endpoint to test the scraper and see what it finds.
+    Returns detailed information about the scraping process.
+    """
+    from playwright.async_api import async_playwright
+    from selectolax.parser import HTMLParser
+
+    debug_info = {
+        "url": f"{settings.AUCTION_BASE_URL}/ventes?page=1",
+        "status": "unknown",
+        "html_length": 0,
+        "found_items": 0,
+        "sample_items": [],
+        "selectors_tried": {},
+        "error": None
+    }
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(ignore_https_errors=True)
+            page = await context.new_page()
+
+            # Navigate to the page
+            await page.goto(debug_info["url"], wait_until="networkidle", timeout=30000)
+            html = await page.content()
+            await browser.close()
+
+            debug_info["html_length"] = len(html)
+            debug_info["status"] = "page_loaded"
+
+            # Parse HTML
+            tree = HTMLParser(html)
+
+            # Try the current selector
+            items = tree.css("div.fr-list-product__item")
+            debug_info["found_items"] = len(items)
+            debug_info["selectors_tried"]["div.fr-list-product__item"] = len(items)
+
+            # Try alternative selectors
+            alt_selectors = [
+                "div.fr-card",
+                "div.product-item",
+                "article",
+                "div[class*='product']",
+                "div[class*='sale']",
+                "div[class*='vente']"
+            ]
+
+            for selector in alt_selectors:
+                found = tree.css(selector)
+                debug_info["selectors_tried"][selector] = len(found)
+
+            # Get sample of first 3 items if any found
+            if items:
+                for idx, item in enumerate(items[:3]):
+                    # Try to extract link
+                    link = item.css_first("h3.fr-card-product__title a[href^='/vente/']")
+                    title = link.text(strip=True) if link else "No title found"
+                    href = link.attributes.get("href", "No href") if link else "No link"
+
+                    debug_info["sample_items"].append({
+                        "index": idx,
+                        "title": title,
+                        "href": href,
+                        "html_snippet": str(item)[:500]  # First 500 chars
+                    })
+            else:
+                # If no items found, get a sample of the HTML
+                debug_info["html_sample"] = html[:2000]  # First 2000 chars
+
+    except Exception as e:
+        debug_info["status"] = "error"
+        debug_info["error"] = str(e)
+        logger.exception("Error in debug scraper: %s", e)
+
+    return debug_info
