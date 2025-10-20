@@ -32,15 +32,17 @@ RUN apt-get update && apt-get install -y \
     libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy requirements first (to leverage Docker caching)
 COPY backend/requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
 RUN playwright install chromium
 
-# Copy application code
-COPY . .
+# ✅ Copy only the backend source code
+COPY backend/ .
 
 # Create uploads directory
 RUN mkdir -p uploads
@@ -48,5 +50,5 @@ RUN mkdir -p uploads
 # Expose port
 EXPOSE 8000
 
-# Run migrations and start server
+# ✅ Run migrations and start server
 CMD ["sh", "-c", "python -c 'from app.db.session import init_db; import asyncio; asyncio.run(init_db())' && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
