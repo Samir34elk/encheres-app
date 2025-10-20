@@ -39,8 +39,9 @@ class Lot(Base):
     alerts = relationship("Alert", back_populates="lot", cascade="all, delete-orphan")
 
     # Indexes for performance
+    # Note: GIN trigram index requires pg_trgm extension which may not be available on free tier
+    # Using standard indexes instead for compatibility
     __table_args__ = (
-        Index('idx_lot_search', 'title', 'description', postgresql_using='gin', postgresql_ops={'title': 'gin_trgm_ops', 'description': 'gin_trgm_ops'}),
         Index('idx_lot_active', 'is_active', 'last_updated'),
     )
 
