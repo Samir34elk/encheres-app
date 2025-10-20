@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     AUCTION_SALE_NUMBER: int = 42
     SALE_REFRESH_HOURS: int = 24
 
+    # Cron Jobs (for external triggers via GitHub Actions)
+    CRON_SECRET: Optional[str] = None  # Must be set in production!
+
     # File storage
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB

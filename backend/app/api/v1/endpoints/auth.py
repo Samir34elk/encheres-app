@@ -53,15 +53,23 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
 
 def clear_auth_cookies(response: Response):
     """Clear authentication cookies"""
+    secure_cookie = settings.COOKIE_SECURE
+    same_site = settings.COOKIE_SAMESITE
+    cookie_domain = settings.COOKIE_DOMAIN
+
     response.delete_cookie(
         key="access_token",
         path="/",
-        domain=settings.COOKIE_DOMAIN
+        domain=cookie_domain,
+        secure=secure_cookie,
+        samesite=same_site
     )
     response.delete_cookie(
         key="refresh_token",
         path="/",
-        domain=settings.COOKIE_DOMAIN
+        domain=cookie_domain,
+        secure=secure_cookie,
+        samesite=same_site
     )
 
 
