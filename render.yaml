@@ -32,7 +32,7 @@ services:
       - key: DEBUG
         value: false
       - key: BACKEND_CORS_ORIGINS
-        value: https://encheres-frontend.onrender.com
+        value: '["https://encheres-frontend.onrender.com"]'
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
