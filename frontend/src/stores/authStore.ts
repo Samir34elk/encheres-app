@@ -33,13 +33,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     formData.append('username', email)
     formData.append('password', password)
 
-    await api.post('/auth/login', formData, {
+    const loginResponse = await api.post('/auth/login', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
 
-    // Tokens are now in httpOnly cookies set by backend
-    // Keep localStorage for backward compatibility (optional)
-    // The cookies will take precedence on the backend side
+    // Store tokens in localStorage for mobile browsers (iOS Safari)
+    // that block cross-site cookies. Backend also sets httpOnly cookies
+    // for desktop browsers as an additional security layer.
+    if (loginResponse.data.access_token) {
+      localStorage.setItem('access_token', loginResponse.data.access_token)
+    }
+    if (loginResponse.data.refresh_token) {
+      localStorage.setItem('refresh_token', loginResponse.data.refresh_token)
+    }
 
     const userResponse = await api.get('/auth/me', {
       headers: { 'X-Skip-Auth-Redirect': 'true' }
