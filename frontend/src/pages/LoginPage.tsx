@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: string } | null)?.from || '/dashboard'
   const { t } = useTranslation()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,7 +21,7 @@ export default function LoginPage() {
     try {
       await login(email, password)
       toast.success('Connexion réussie!')
-      navigate('/dashboard')
+      navigate(from, { replace: true })
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Erreur de connexion')
     } finally {
