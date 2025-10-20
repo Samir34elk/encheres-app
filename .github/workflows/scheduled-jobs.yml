@@ -2,8 +2,9 @@ name: Scheduled Jobs
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
-    - cron: '0 3 * * *'
+    - cron: '*/15 * * * *'  # Scraping every 15 minutes
+    - cron: '0 3 * * *'     # Discovery at 3am
+    - cron: '* * * * *'     # Price updates every minute
   workflow_dispatch:
     inputs:
       job:
@@ -14,6 +15,7 @@ on:
         options:
           - scraping
           - discovery
+          - prices
           - both
 
 env:
@@ -207,3 +209,22 @@ jobs:
             --mode discover \
             --max-pages 10 \
             --max-sales 50
+
+  update-favorite-prices:
+    if: |
+      github.event.schedule == '* * * * *' ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'prices' || github.event.inputs.job == 'both'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Update favorite prices
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_BASE_URL: ${{ env.BACKEND_URL }}/api/v1
+        run: |
+          curl -X POST "$API_BASE_URL/scheduler/update-favorite-prices" \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP Status: %{http_code}\n" \
+            -s -S

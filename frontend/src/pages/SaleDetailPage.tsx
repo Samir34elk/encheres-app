@@ -17,6 +17,7 @@ interface Lot {
   url: string | null
   image_url: string | null
   sale_id: number | null
+  sale_end_date: string | null
 }
 
 interface Sale {
@@ -30,7 +31,7 @@ interface Sale {
   end_date?: string | null
 }
 
-type SortField = 'price' | 'lot_number' | 'title' | 'status' | 'depot_location'
+type SortField = 'price' | 'lot_number' | 'title' | 'status' | 'depot_location' | 'end_date'
 type SortOrder = 'asc' | 'desc'
 
 export default function SaleDetailPage() {
@@ -217,11 +218,19 @@ export default function SaleDetailPage() {
     })
 
     filtered.sort((a, b) => {
-      let aVal = a[sortField]
-      let bVal = b[sortField]
+      const fieldKey = sortField === 'end_date' ? 'sale_end_date' : sortField
+      let aVal = a[fieldKey as keyof Lot]
+      let bVal = b[fieldKey as keyof Lot]
 
-      if (aVal === null) aVal = sortOrder === 'asc' ? Infinity : -Infinity
-      if (bVal === null) bVal = sortOrder === 'asc' ? Infinity : -Infinity
+      if (aVal === null || aVal === undefined) aVal = sortOrder === 'asc' ? Infinity : -Infinity
+      if (bVal === null || bVal === undefined) bVal = sortOrder === 'asc' ? Infinity : -Infinity
+
+      // Date comparison
+      if (sortField === 'end_date' && typeof aVal === 'string' && typeof bVal === 'string') {
+        const dateA = new Date(aVal).getTime()
+        const dateB = new Date(bVal).getTime()
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA
+      }
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return sortOrder === 'asc'
@@ -580,6 +589,15 @@ export default function SaleDetailPage() {
                       {sortField === 'depot_location' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                     </div>
                   </th>
+                  <th
+                    className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('end_date')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Date de clôture
+                      {sortField === 'end_date' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                    </div>
+                  </th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
                     URL Lot
                   </th>
@@ -622,12 +640,18 @@ function TableRow({
   return (
     <tr className="hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-colors group">
       <td className="px-3 py-2 text-center">
-        <input
-          type="checkbox"
-          checked={isFavorite}
-          onChange={() => onToggleFavorite(lot.id)}
-          className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
-        />
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(lot.id)}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+            isFavorite
+              ? 'border-pink-200 bg-pink-50 text-pink-600 dark:border-pink-500/40 dark:bg-pink-500/10 dark:text-pink-200'
+              : 'border-gray-200 bg-white text-gray-400 hover:text-pink-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+          }`}
+          aria-label={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+        >
+          <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
+        </button>
       </td>
 
       <td
@@ -639,9 +663,12 @@ function TableRow({
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          <span className="text-gray-900 dark:text-white break-words">
+          <Link
+            to={`/lots/${lot.id}`}
+            className="text-gray-900 dark:text-white break-words hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer"
+          >
             {lot.title}
-          </span>
+          </Link>
 
           {showTooltip && lot.description && lot.description !== 'N/A' && (
             <div
@@ -683,6 +710,20 @@ function TableRow({
         style={{ maxWidth: '300px' }}
       >
         {lot.depot_location || 'N/A'}
+      </td>
+
+      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+        {lot.sale_end_date ? (
+          <span className="text-sm">
+            {new Date(lot.sale_end_date).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })}
+          </span>
+        ) : (
+          <span className="text-gray-400 text-xs">N/A</span>
+        )}
       </td>
 
       <td className="px-3 py-2">

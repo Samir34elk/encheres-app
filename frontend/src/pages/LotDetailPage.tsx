@@ -238,25 +238,25 @@ export default function LotDetailPage() {
           Retour aux lots
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={toggleFavorite}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
               isFavorite
-                ? 'bg-pink-50 border-pink-300 text-pink-700 dark:bg-pink-900/30 dark:border-pink-600'
-                : 'bg-white border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                ? 'bg-pink-50 border-pink-200 text-pink-700 dark:bg-pink-900/20 dark:border-pink-600 dark:text-pink-300'
+                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
             }`}
           >
             <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
-            {isFavorite ? 'Favori' : 'Ajouter aux favoris'}
+            <span className="hidden sm:inline">{isFavorite ? 'Favori' : 'Favoris'}</span>
           </button>
 
           <button
             onClick={() => setShowCreateAlert(!showCreateAlert)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             <Bell className="w-4 h-4" />
-            Créer une alerte
+            <span className="hidden sm:inline">Alerte</span>
           </button>
 
           {lot.url && (
@@ -264,10 +264,10 @@ export default function LotDetailPage() {
               href={lot.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
             >
               <ExternalLink className="w-4 h-4" />
-              Voir sur le site
+              <span className="hidden sm:inline">Site officiel</span>
             </a>
           )}
         </div>
