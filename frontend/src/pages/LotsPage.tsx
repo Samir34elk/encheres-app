@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { Search, Heart, ExternalLink, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -16,9 +17,10 @@ interface Lot {
   url: string | null
   image_url: string | null
   sale_id: number | null
+  sale_end_date: string | null
 }
 
-type SortField = 'price' | 'lot_number' | 'title' | 'status' | 'depot_location'
+type SortField = 'price' | 'lot_number' | 'title' | 'status' | 'depot_location' | 'end_date'
 type SortOrder = 'asc' | 'desc'
 
 export default function LotsPage() {
@@ -239,12 +241,21 @@ export default function LotsPage() {
 
     // Sort
     filtered.sort((a, b) => {
-      let aVal = a[sortField]
-      let bVal = b[sortField]
+      // Map end_date to sale_end_date
+      const fieldKey = sortField === 'end_date' ? 'sale_end_date' : sortField
+      let aVal = a[fieldKey as keyof Lot]
+      let bVal = b[fieldKey as keyof Lot]
 
       // Handle null values
-      if (aVal === null) aVal = sortOrder === 'asc' ? Infinity : -Infinity
-      if (bVal === null) bVal = sortOrder === 'asc' ? Infinity : -Infinity
+      if (aVal === null || aVal === undefined) aVal = sortOrder === 'asc' ? Infinity : -Infinity
+      if (bVal === null || bVal === undefined) bVal = sortOrder === 'asc' ? Infinity : -Infinity
+
+      // Date comparison
+      if (sortField === 'end_date' && typeof aVal === 'string' && typeof bVal === 'string') {
+        const dateA = new Date(aVal).getTime()
+        const dateB = new Date(bVal).getTime()
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA
+      }
 
       // String comparison
       if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -637,6 +648,15 @@ export default function LotsPage() {
                       {sortField === 'depot_location' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                     </div>
                   </th>
+                  <th
+                    className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('end_date')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Date de clôture
+                      {sortField === 'end_date' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                    </div>
+                  </th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
                     URL Lot
                   </th>
@@ -669,7 +689,8 @@ export default function LotsPage() {
                   { field: 'lot_number' as SortField, label: 'N° Lot' },
                   { field: 'title' as SortField, label: 'Titre' },
                   { field: 'status' as SortField, label: 'Statut' },
-                  { field: 'depot_location' as SortField, label: 'Lieu' }
+                  { field: 'depot_location' as SortField, label: 'Lieu' },
+                  { field: 'end_date' as SortField, label: 'Date de clôture' }
                 ]).map(({ field, label }) => {
                   const isActive = sortField === field
                   return (
@@ -767,13 +788,16 @@ function TableRow({
         style={{ maxWidth: '450px' }}
       >
         <div
-          className="relative inline-block cursor-help"
+          className="relative inline-block"
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          <span className="text-gray-900 dark:text-white break-words">
+          <Link
+            to={`/lot/${lot.id}`}
+            className="text-gray-900 dark:text-white break-words hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer"
+          >
             {lot.title}
-          </span>
+          </Link>
 
           {/* Tooltip - Positioned to the right */}
           {showTooltip && lot.description && lot.description !== 'N/A' && (
@@ -821,6 +845,21 @@ function TableRow({
         style={{ maxWidth: '300px' }}
       >
         {lot.depot_location || 'N/A'}
+      </td>
+
+      {/* End Date */}
+      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+        {lot.sale_end_date ? (
+          <span className="text-sm">
+            {new Date(lot.sale_end_date).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })}
+          </span>
+        ) : (
+          <span className="text-gray-400 text-xs">N/A</span>
+        )}
       </td>
 
       {/* URL Lot */}
@@ -909,9 +948,12 @@ function LotCard({
               </span>
             )}
           </div>
-          <h3 className="mt-2 text-base font-semibold text-gray-900 dark:text-white">
+          <Link
+            to={`/lot/${lot.id}`}
+            className="mt-2 block text-base font-semibold text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+          >
             {lot.title}
-          </h3>
+          </Link>
         </div>
         <button
           type="button"
@@ -954,6 +996,18 @@ function LotCard({
             <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
               {lot.depot_location}
             </p>
+          </div>
+        )}
+        {lot.sale_end_date && (
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500 dark:text-gray-400">Date de clôture</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-200">
+              {new Date(lot.sale_end_date).toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              })}
+            </span>
           </div>
         )}
       </div>
