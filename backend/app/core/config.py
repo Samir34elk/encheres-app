@@ -83,6 +83,11 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        # Convert postgresql:// to postgresql+asyncpg:// for async support
+        if self.DATABASE_URL.startswith("postgresql://"):
+            self.DATABASE_URL = self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
         # Validate critical settings
         if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
             import logging
