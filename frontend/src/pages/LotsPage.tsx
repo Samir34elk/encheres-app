@@ -793,7 +793,7 @@ function TableRow({
           onMouseLeave={() => setShowTooltip(false)}
         >
           <Link
-            to={`/lot/${lot.id}`}
+            to={`/lots/${lot.id}`}
             className="text-gray-900 dark:text-white break-words hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer"
           >
             {lot.title}
@@ -949,7 +949,7 @@ function LotCard({
             )}
           </div>
           <Link
-            to={`/lot/${lot.id}`}
+            to={`/lots/${lot.id}`}
             className="mt-2 block text-base font-semibold text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
           >
             {lot.title}
