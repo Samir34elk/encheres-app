@@ -12,7 +12,6 @@ from app.core.config import settings
 from app.db.session import get_db, AsyncSessionLocal
 from app.services.batch_scraper import BatchAuctionScraper
 from app.services.sale_discovery import SaleDiscoveryService
-from app.services.price_updater import FavoritePriceUpdater
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -125,48 +124,6 @@ async def trigger_discovery(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Discovery job failed: {str(e)}"
-            )
-
-
-@router.post("/update-favorite-prices")
-async def update_favorite_prices(
-    _: None = Depends(verify_cron_secret)
-):
-    """
-    Trigger the favorite lots price update job manually.
-    This endpoint is called by GitHub Actions every minute.
-
-    Headers:
-        X-Cron-Secret: The secret key to authenticate the request
-
-    Returns:
-        Status and summary of the price update job
-    """
-    logger.info("Favorite prices update job triggered via API endpoint")
-
-    async with AsyncSessionLocal() as db:
-        try:
-            updater = FavoritePriceUpdater(db)
-            summary = await updater.run()
-
-            result = {
-                "status": "success",
-                "job": "update_favorite_prices",
-                "total_lots": summary.get("total", 0),
-                "updated": summary.get("updated", 0),
-                "errors": summary.get("errors", 0),
-                "timestamp": summary.get("timestamp"),
-                "message": f"Price update completed: {summary.get('updated', 0)} of {summary.get('total', 0)} prices updated"
-            }
-
-            logger.info(f"Favorite prices update completed successfully: {result}")
-            return result
-
-        except Exception as e:
-            logger.exception(f"Error during favorite prices update job: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Favorite prices update job failed: {str(e)}"
             )
 
 

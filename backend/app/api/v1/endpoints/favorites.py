@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.db.session import get_db
 from app.core.security import get_current_active_user
+from app.core.config import settings
 from app.models.user import User
 from app.models.favorite import Favorite
 from app.models.lot import Lot
@@ -15,8 +17,24 @@ from app.schemas.favorite import (
     FavoriteListResponse,
     FavoriteListItem,
 )
+from app.schemas.lot import LotResponse
 
 router = APIRouter()
+
+
+async def verify_cron_secret(x_cron_secret: str = Header(None)):
+    """Verify the cron secret header for GitHub Actions"""
+    cron_secret = getattr(settings, 'CRON_SECRET', None)
+    if not cron_secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="CRON_SECRET not configured"
+        )
+    if not x_cron_secret or x_cron_secret != cron_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing cron secret"
+        )
 
 
 def _serialize_tags(raw_tags: str | None) -> List[str] | None:
@@ -190,3 +208,51 @@ async def remove_favorite(
     await db.commit()
 
     return None
+
+
+@router.get("/lots", response_model=List[LotResponse])
+async def get_all_favorited_lots(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_cron_secret)
+):
+    """
+    Get all lots that have been favorited by at least one user.
+    Used by GitHub Actions to scrape prices.
+    Requires CRON_SECRET header.
+    """
+    result = await db.execute(
+        select(Lot)
+        .join(Favorite, Favorite.lot_id == Lot.id)
+        .options(selectinload(Lot.sale))
+        .where(Lot.url.isnot(None))
+        .where(Lot.url != "")
+        .where(Lot.url != "N/A")
+        .where(Lot.is_active == 1)
+        .distinct()
+    )
+    lots = result.scalars().all()
+
+    # Transform to response format
+    items = []
+    for lot in lots:
+        lot_dict = {
+            "id": lot.id,
+            "lot_number": lot.lot_number,
+            "title": lot.title,
+            "description": lot.description,
+            "price": lot.price,
+            "status": lot.status,
+            "depot_location": lot.depot_location,
+            "url": lot.url,
+            "image_url": lot.image_url,
+            "sale_id": lot.sale_id,
+            "sale_end_date": lot.sale.end_date if lot.sale else None,
+            "first_seen": lot.first_seen,
+            "last_updated": lot.last_updated,
+            "is_active": lot.is_active,
+            "view_count": lot.view_count,
+            "favorite_count": lot.favorite_count
+        }
+        items.append(LotResponse(**lot_dict))
+
+    return items
