@@ -1,0 +1,270 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (shared by all services)
+  db:
+    image: postgres:15-alpine
+    container_name: encheres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: encheres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - encheres-network
+
+  # Redis for caching and message queue
+  redis:
+    image: redis:7-alpine
+    container_name: encheres_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - encheres-network
+
+  # RabbitMQ for message bus (inter-service communication)
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: encheres_rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - encheres-network
+
+  # Auth Service (Port 8001)
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/encheres
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/encheres
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=false
+    volumes:
+      - ./services/auth-service:/app
+      - ./services/shared:/app/shared
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+  # Core Service (Port 8002)
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile
+    container_name: core_service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/encheres
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/encheres
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=false
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    volumes:
+      - ./services/core-service:/app
+      - ./services/shared:/app/shared
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+  # Scraper Service (Port 8003) - REPLACES GITHUB ACTIONS
+  scraper-service:
+    build:
+      context: ./services/scraper-service
+      dockerfile: Dockerfile
+    container_name: scraper_service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/encheres
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/encheres
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=false
+      - ENABLE_SCHEDULER=true
+      - SCRAPER_INTERVAL_MINUTES=15
+      - ENABLE_PRICE_UPDATES=true
+      - AUCTION_BASE_URL=https://encheres-domaine.gouv.fr
+      - CORE_SERVICE_URL=http://core-service:8002
+    volumes:
+      - ./services/scraper-service:/app
+      - ./services/shared:/app/shared
+      - ./scripts:/app/scripts
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      core-service:
+        condition: service_started
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+  # Notification Service (Port 8004)
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification_service
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/encheres
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/encheres
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=false
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_FROM=${MAIL_FROM}
+      - MAIL_SERVER=${MAIL_SERVER:-smtp.gmail.com}
+    volumes:
+      - ./services/notification-service:/app
+      - ./services/shared:/app/shared
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+  # Admin Service (Port 8005)
+  admin-service:
+    build:
+      context: ./services/admin-service
+      dockerfile: Dockerfile
+    container_name: admin_service
+    ports:
+      - "8005:8005"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/encheres
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/encheres
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=false
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - CORE_SERVICE_URL=http://core-service:8002
+    volumes:
+      - ./services/admin-service:/app
+      - ./services/shared:/app/shared
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      core-service:
+        condition: service_started
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+  # API Gateway (Port 8000) - Routes requests to microservices
+  api-gateway:
+    image: nginx:alpine
+    container_name: api_gateway
+    ports:
+      - "8000:80"
+    volumes:
+      - ./services/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - core-service
+      - scraper-service
+      - notification-service
+      - admin-service
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+  # Frontend (optional, keep existing frontend)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: encheres_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+    networks:
+      - encheres-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  encheres-network:
+    driver: bridge
