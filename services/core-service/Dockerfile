@@ -8,17 +8,19 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
+# Copy requirements from shared
+COPY shared/requirements.txt /app/shared-requirements.txt
+COPY core-service/requirements.txt /app/requirements.txt
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /app/shared-requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy shared library
-COPY ../shared /app/shared
+COPY shared /app/shared
 
 # Copy application code
-COPY ./app /app/app
+COPY core-service/app /app/app
 
 # Expose port
 EXPOSE 8002

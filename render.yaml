@@ -22,7 +22,7 @@ services:
     name: encheres-auth-service
     env: docker
     dockerfilePath: ./services/auth-service/Dockerfile
-    dockerContext: ./services/auth-service
+    dockerContext: ./services
     region: frankfurt
     plan: free
     healthCheckPath: /health
@@ -59,7 +59,7 @@ services:
     name: encheres-core-service
     env: docker
     dockerfilePath: ./services/core-service/Dockerfile
-    dockerContext: ./services/core-service
+    dockerContext: ./services
     region: frankfurt
     plan: free
     healthCheckPath: /health
@@ -89,7 +89,7 @@ services:
     name: encheres-scraper-service
     env: docker
     dockerfilePath: ./services/scraper-service/Dockerfile
-    dockerContext: ./services/scraper-service
+    dockerContext: ./services
     region: frankfurt
     plan: free  # Needs more resources for Playwright
     healthCheckPath: /health
@@ -133,7 +133,7 @@ services:
     name: encheres-notification-service
     env: docker
     dockerfilePath: ./services/notification-service/Dockerfile
-    dockerContext: ./services/notification-service
+    dockerContext: ./services
     region: frankfurt
     plan: free
     healthCheckPath: /health
@@ -168,7 +168,7 @@ services:
     name: encheres-admin-service
     env: docker
     dockerfilePath: ./services/admin-service/Dockerfile
-    dockerContext: ./services/admin-service
+    dockerContext: ./services
     region: frankfurt
     plan: free
     healthCheckPath: /health
