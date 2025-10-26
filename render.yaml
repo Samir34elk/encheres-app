@@ -91,7 +91,7 @@ services:
     dockerfilePath: ./services/scraper-service/Dockerfile
     dockerContext: ./services/scraper-service
     region: frankfurt
-    plan: starter  # Needs more resources for Playwright
+    plan: free  # Needs more resources for Playwright
     healthCheckPath: /health
     envVars:
       - key: SERVICE_NAME
