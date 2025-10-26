@@ -4,7 +4,9 @@ import os
 from typing import List
 
 # Add shared library to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../shared"))
+# In Docker: /app/shared, in local dev: ../../../shared
+shared_path = "/app/shared" if os.path.exists("/app/shared") else os.path.join(os.path.dirname(__file__), "../../../shared")
+sys.path.insert(0, shared_path)
 
 from shared.config import BaseServiceConfig
 from pydantic import Field
