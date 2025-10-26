@@ -21,7 +21,7 @@ services:
   - type: web
     name: encheres-auth-service
     env: docker
-    dockerfilePath: ./auth-service/Dockerfile
+    dockerfilePath: ./services/auth-service/Dockerfile
     dockerContext: ./services
     region: frankfurt
     plan: free
@@ -58,7 +58,7 @@ services:
   - type: web
     name: encheres-core-service
     env: docker
-    dockerfilePath: ./core-service/Dockerfile
+    dockerfilePath: ./services/core-service/Dockerfile
     dockerContext: ./services
     region: frankfurt
     plan: free
@@ -88,7 +88,7 @@ services:
   - type: web
     name: encheres-scraper-service
     env: docker
-    dockerfilePath: ./scraper-service/Dockerfile
+    dockerfilePath: ./services/scraper-service/Dockerfile
     dockerContext: ./services
     region: frankfurt
     plan: free  # Needs more resources for Playwright
@@ -132,7 +132,7 @@ services:
   - type: web
     name: encheres-notification-service
     env: docker
-    dockerfilePath: ./notification-service/Dockerfile
+    dockerfilePath: ./services/notification-service/Dockerfile
     dockerContext: ./services
     region: frankfurt
     plan: free
@@ -167,7 +167,7 @@ services:
   - type: web
     name: encheres-admin-service
     env: docker
-    dockerfilePath: ./admin-service/Dockerfile
+    dockerfilePath: ./services/admin-service/Dockerfile
     dockerContext: ./services
     region: frankfurt
     plan: free
