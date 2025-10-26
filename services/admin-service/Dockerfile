@@ -9,18 +9,18 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements from shared
-COPY shared/requirements.txt /app/shared-requirements.txt
-COPY admin-service/requirements.txt /app/requirements.txt
+COPY services/shared/requirements.txt /app/shared-requirements.txt
+COPY services/admin-service/requirements.txt /app/requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r /app/shared-requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy shared library
-COPY shared /app/shared
+COPY services/shared /app/shared
 
 # Copy application code
-COPY admin-service/app /app/app
+COPY services/admin-service/app /app/app
 
 # Expose port
 EXPOSE 8005
