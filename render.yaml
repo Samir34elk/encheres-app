@@ -12,14 +12,8 @@ databases:
         description: Allow all (required for Render services)
 
 services:
-  # PostgreSQL Database (defined above)
-
-  # Redis for BullMQ (scraper queue)
-  - type: redis
-    name: encheres-redis
-    plan: free
-    region: frankfurt
-    maxmemoryPolicy: allkeys-lru
+  # PostgreSQL Database (defined above in databases section)
+  # Redis (encheres-redis) created separately - ID: red-d3vck87diees73esn4a0
 
   # Auth Service - JWT Authentication
   - type: web
@@ -105,10 +99,7 @@ services:
       - key: PORT
         value: 10000
       - key: REDIS_URL
-        fromService:
-          name: encheres-redis
-          type: redis
-          property: connectionString
+        sync: false  # Set manually in dashboard to Redis connection string
       - key: SALES_SERVICE_URL
         fromService:
           name: encheres-sales-service-v2
