@@ -23,7 +23,7 @@ RUN npm install
 RUN npx prisma generate
 
 # Build TypeScript
-RUN npm run build
+RUN npm run build && ls -la dist/
 
 # Set production environment
 ENV NODE_ENV=production
@@ -32,4 +32,4 @@ ENV PORT=3002
 EXPOSE 3002
 
 # Start service (no migrations - shared database with Python backend)
-CMD node dist/index.js
+CMD ["node", "dist/index.js"]

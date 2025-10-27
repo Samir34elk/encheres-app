@@ -32,4 +32,4 @@ ENV PORT=3001
 EXPOSE 3001
 
 # Start service (no migrations - shared database with Python backend)
-CMD node dist/index.js
+CMD ["node", "dist/index.js"]
