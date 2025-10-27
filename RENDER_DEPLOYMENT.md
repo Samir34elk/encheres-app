@@ -86,7 +86,7 @@ Dashboard → New → Web Service
 - Name: encheres-auth-service
 - Environment: Docker
 - Dockerfile Path: ./services/auth-service/Dockerfile
-- Docker Context: ./services
+- Docker Context: .
 - Region: Frankfurt
 - Plan: Free
 
@@ -105,7 +105,7 @@ Dashboard → New → Web Service
 - Name: encheres-core-service
 - Environment: Docker
 - Dockerfile Path: ./services/core-service/Dockerfile
-- Docker Context: ./services
+- Docker Context: .
 - Region: Frankfurt
 - Plan: Free
 
@@ -125,7 +125,7 @@ Dashboard → New → Web Service
 - Name: encheres-scraper-service
 - Environment: Docker
 - Dockerfile Path: ./services/scraper-service/Dockerfile
-- Docker Context: ./services
+- Docker Context: .
 - Region: Frankfurt
 - Plan: STARTER (important pour Playwright)
 
@@ -148,7 +148,7 @@ Dashboard → New → Web Service
 - Name: encheres-notification-service
 - Environment: Docker
 - Dockerfile Path: ./services/notification-service/Dockerfile
-- Docker Context: ./services
+- Docker Context: .
 - Region: Frankfurt
 - Plan: Free
 
@@ -167,7 +167,7 @@ Dashboard → New → Web Service
 - Name: encheres-admin-service
 - Environment: Docker
 - Dockerfile Path: ./services/admin-service/Dockerfile
-- Docker Context: ./services
+- Docker Context: .
 - Region: Frankfurt
 - Plan: Free
 
