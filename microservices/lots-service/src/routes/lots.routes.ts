@@ -43,7 +43,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
 
   // Create lot (admin only)
   fastify.post('/', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const result = await lotsService.createLot(request.body);
@@ -58,7 +58,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
 
   // Update lot (admin only)
   fastify.patch('/:id', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const { id } = request.params as any;
@@ -74,8 +74,8 @@ export async function lotsRoutes(fastify: FastifyInstance) {
 
   // Delete lot (admin only)
   fastify.delete('/:id', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
-  }, async (request, reply) => {
+    preHandler: authMiddleware({ requireAdmin: true })
+  }, async (request, reply) =>{
     try {
       const { id } = request.params as any;
       const result = await lotsService.deleteLot(id);

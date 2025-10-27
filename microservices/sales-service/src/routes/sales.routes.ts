@@ -53,7 +53,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
 
   // Create sale (admin only)
   fastify.post('/', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const result = await salesService.createSale(request.body);
@@ -68,7 +68,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
 
   // Update sale (admin only)
   fastify.patch('/:id', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const { id } = request.params as any;
@@ -84,7 +84,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
 
   // Delete sale (admin only)
   fastify.delete('/:id', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const { id } = request.params as any;
