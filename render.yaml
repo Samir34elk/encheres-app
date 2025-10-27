@@ -7,7 +7,6 @@ databases:
     user: encheres
     region: frankfurt
     plan: free
-    ipAllowList: []
 
 services:
   # PostgreSQL Database (defined above)
@@ -203,7 +202,6 @@ services:
     runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
-    region: frankfurt
     pullRequestPreviewsEnabled: yes
     routes:
       - type: rewrite
