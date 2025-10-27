@@ -1,0 +1,28 @@
+// Prisma schema for sales-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Sale {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  saleDate    DateTime?
+  location    String?
+  organizer   String?
+  status      String    @default("upcoming") // upcoming, ongoing, completed, cancelled
+  sourceUrl   String?
+  externalId  String?   @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([saleDate])
+  @@map("sales")
+}

@@ -1,0 +1,25 @@
+# Base Dockerfile for all Node.js microservices
+FROM node:20-alpine AS base
+
+# Install dependencies for Prisma
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+# Copy shared code
+COPY shared/ ./shared/
+
+FROM base AS builder
+
+# Install dependencies and build
+RUN cd shared && npm install
+
+FROM base AS runner
+
+# Copy built shared code
+COPY --from=builder /app/shared/node_modules ./shared/node_modules
+
+# Set production environment
+ENV NODE_ENV=production
+
+CMD ["node", "dist/index.js"]
