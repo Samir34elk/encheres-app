@@ -1,273 +1,226 @@
-# Render.com Blueprint - Microservices Architecture
-# Documentation: https://render.com/docs/blueprint-spec
-#
-# IMPORTANT: This configuration deploys a microservices architecture
-# GitHub Actions workflows are REPLACED by the Scraper Service
+# Render Blueprint - Node.js/TypeScript Microservices
+# Complete rewrite from Python to Node.js for better performance
 
 databases:
-  - name: encheres-db
+  - name: encheres-postgres
     databaseName: encheres
-    user: encheres_user
+    user: encheres
     region: frankfurt
     plan: free
     ipAllowList: []
 
 services:
-  # ========================================
-  # Microservices Architecture
-  # ========================================
+  # PostgreSQL Database (defined above)
 
-  # 1. Auth Service (Authentication & Authorization)
+  # Redis for BullMQ (scraper queue)
+  - type: redis
+    name: encheres-redis
+    plan: free
+    region: frankfurt
+    maxmemoryPolicy: allkeys-lru
+
+  # Auth Service - JWT Authentication
   - type: web
-    name: encheres-auth-service
+    name: encheres-auth-service-v2
     env: docker
-    dockerfilePath: ./services/auth-service/Dockerfile
-    dockerContext: .
+    dockerfilePath: ./microservices/auth-service/Dockerfile
+    dockerContext: ./microservices
     region: frankfurt
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: SERVICE_NAME
-        value: auth-service
+      - key: NODE_ENV
+        value: production
       - key: PORT
-        value: 8001
+        value: 10000
       - key: DATABASE_URL
         fromDatabase:
-          name: encheres-db
+          name: encheres-postgres
           property: connectionString
-      - key: DATABASE_URL_SYNC
-        fromDatabase:
-          name: encheres-db
-          property: connectionString
-      - key: SECRET_KEY
+      - key: JWT_SECRET
         generateValue: true
-      - key: ALGORITHM
-        value: HS256
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: 30
-      - key: REFRESH_TOKEN_EXPIRE_DAYS
-        value: 7
-      - key: COOKIE_SECURE
-        value: true
-      - key: COOKIE_SAMESITE
-        value: none
-      - key: DEBUG
-        value: false
+      - key: CORS_ORIGIN
+        value: https://encheres-frontend.onrender.com
 
-  # 2. Core Service (Sales, Lots, Favorites, Alerts)
+  # Lots Service - Lots, Favorites, Alerts
   - type: web
-    name: encheres-core-service
+    name: encheres-lots-service-v2
     env: docker
-    dockerfilePath: ./services/core-service/Dockerfile
-    dockerContext: .
+    dockerfilePath: ./microservices/lots-service/Dockerfile
+    dockerContext: ./microservices
     region: frankfurt
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: SERVICE_NAME
-        value: core-service
+      - key: NODE_ENV
+        value: production
       - key: PORT
-        value: 8002
+        value: 10000
       - key: DATABASE_URL
         fromDatabase:
-          name: encheres-db
+          name: encheres-postgres
           property: connectionString
-      - key: DATABASE_URL_SYNC
-        fromDatabase:
-          name: encheres-db
-          property: connectionString
-      - key: SECRET_KEY
+      - key: JWT_SECRET
         sync: false
-      - key: AUTH_SERVICE_URL
-        value: https://encheres-auth-service.onrender.com
-      - key: DEBUG
-        value: false
+      - key: CORS_ORIGIN
+        value: https://encheres-frontend.onrender.com
 
-  # 3. Scraper Service (REPLACES GitHub Actions)
-  # This service runs scheduled jobs internally using APScheduler
+  # Sales Service - Sales Management
   - type: web
-    name: encheres-scraper-service
+    name: encheres-sales-service-v2
     env: docker
-    dockerfilePath: ./services/scraper-service/Dockerfile
-    dockerContext: .
-    region: frankfurt
-    plan: free  # Needs more resources for Playwright
-    healthCheckPath: /health
-    envVars:
-      - key: SERVICE_NAME
-        value: scraper-service
-      - key: PORT
-        value: 8003
-      - key: DATABASE_URL
-        fromDatabase:
-          name: encheres-db
-          property: connectionString
-      - key: DATABASE_URL_SYNC
-        fromDatabase:
-          name: encheres-db
-          property: connectionString
-      - key: SECRET_KEY
-        sync: false
-      - key: CORE_SERVICE_URL
-        value: https://encheres-core-service.onrender.com
-      # Scheduler settings (replaces GitHub Actions)
-      - key: ENABLE_SCHEDULER
-        value: true
-      - key: SCRAPER_INTERVAL_MINUTES
-        value: 15
-      - key: ENABLE_PRICE_UPDATES
-        value: true
-      - key: AUCTION_BASE_URL
-        value: https://encheres-domaine.gouv.fr
-      - key: MAX_PAGES
-        value: 5
-      - key: MAX_SALES
-        value: 20
-      - key: HEADLESS_BROWSER
-        value: true
-      - key: DEBUG
-        value: false
-
-  # 4. Notification Service (Email, Push Notifications)
-  - type: web
-    name: encheres-notification-service
-    env: docker
-    dockerfilePath: ./services/notification-service/Dockerfile
-    dockerContext: .
+    dockerfilePath: ./microservices/sales-service/Dockerfile
+    dockerContext: ./microservices
     region: frankfurt
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: SERVICE_NAME
-        value: notification-service
+      - key: NODE_ENV
+        value: production
       - key: PORT
-        value: 8004
+        value: 10000
       - key: DATABASE_URL
         fromDatabase:
-          name: encheres-db
+          name: encheres-postgres
           property: connectionString
-      - key: DATABASE_URL_SYNC
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://encheres-frontend.onrender.com
+
+  # Scraper Service - Web Scraping with Puppeteer + BullMQ
+  - type: web
+    name: encheres-scraper-service-v2
+    env: docker
+    dockerfilePath: ./microservices/scraper-service/Dockerfile
+    dockerContext: ./microservices
+    region: frankfurt
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: REDIS_URL
+        fromService:
+          name: encheres-redis
+          type: redis
+          property: connectionString
+      - key: SALES_SERVICE_URL
+        fromService:
+          name: encheres-sales-service-v2
+          type: web
+          property: hostport
+      - key: LOTS_SERVICE_URL
+        fromService:
+          name: encheres-lots-service-v2
+          type: web
+          property: hostport
+      - key: CORS_ORIGIN
+        value: https://encheres-frontend.onrender.com
+
+  # Notifications Service - Emails
+  - type: web
+    name: encheres-notifications-service-v2
+    env: docker
+    dockerfilePath: ./microservices/notifications-service/Dockerfile
+    dockerContext: ./microservices
+    region: frankfurt
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
         fromDatabase:
-          name: encheres-db
+          name: encheres-postgres
           property: connectionString
-      - key: SECRET_KEY
+      - key: JWT_SECRET
         sync: false
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
-        sync: false
-      - key: MAIL_FROM
-        value: noreply@encheres.com
-      - key: MAIL_SERVER
+      - key: CORS_ORIGIN
+        value: https://encheres-frontend.onrender.com
+      - key: SMTP_HOST
         value: smtp.gmail.com
-      - key: DEBUG
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
         value: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        value: noreply@encheres.com
 
-  # 5. Admin Service (Administration & Data Ingestion)
+  # API Gateway - Reverse Proxy
   - type: web
-    name: encheres-admin-service
+    name: encheres-api-gateway-v2
     env: docker
-    dockerfilePath: ./services/admin-service/Dockerfile
-    dockerContext: .
+    dockerfilePath: ./microservices/api-gateway/Dockerfile
+    dockerContext: ./microservices
     region: frankfurt
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: SERVICE_NAME
-        value: admin-service
+      - key: NODE_ENV
+        value: production
       - key: PORT
-        value: 8005
-      - key: DATABASE_URL
-        fromDatabase:
-          name: encheres-db
-          property: connectionString
-      - key: DATABASE_URL_SYNC
-        fromDatabase:
-          name: encheres-db
-          property: connectionString
-      - key: SECRET_KEY
-        sync: false
+        value: 10000
       - key: AUTH_SERVICE_URL
-        value: https://encheres-auth-service.onrender.com
-      - key: CORE_SERVICE_URL
-        value: https://encheres-core-service.onrender.com
-      - key: DEBUG
-        value: false
+        fromService:
+          name: encheres-auth-service-v2
+          type: web
+          property: hostport
+      - key: LOTS_SERVICE_URL
+        fromService:
+          name: encheres-lots-service-v2
+          type: web
+          property: hostport
+      - key: SALES_SERVICE_URL
+        fromService:
+          name: encheres-sales-service-v2
+          type: web
+          property: hostport
+      - key: SCRAPER_SERVICE_URL
+        fromService:
+          name: encheres-scraper-service-v2
+          type: web
+          property: hostport
+      - key: NOTIFICATIONS_SERVICE_URL
+        fromService:
+          name: encheres-notifications-service-v2
+          type: web
+          property: hostport
+      - key: CORS_ORIGIN
+        value: https://encheres-frontend.onrender.com
 
-  # ========================================
-  # Frontend (Static Site)
-  # ========================================
-  - type: web
-    name: encheres-frontend
-    env: static
+  # Frontend - Static Site (React + Vite)
+  - type: static
+    name: encheres-frontend-v2
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
-    pullRequestPreviewsEnabled: true
+    pullRequestPreviewsEnabled: yes
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      # Point to Auth Service for authentication
       - key: VITE_API_URL
-        value: https://encheres-auth-service.onrender.com/api/v1
-      # Additional service URLs (if needed by frontend)
-      - key: VITE_CORE_SERVICE_URL
-        value: https://encheres-core-service.onrender.com/api/v1
-      - key: VITE_SCRAPER_SERVICE_URL
-        value: https://encheres-scraper-service.onrender.com/api/v1
+        fromService:
+          name: encheres-api-gateway-v2
+          type: web
+          property: host
 
-# ========================================
-# IMPORTANT NOTES
-# ========================================
-#
-# 1. GitHub Actions Replacement:
-#    - The Scraper Service (encheres-scraper-service) replaces ALL GitHub Actions workflows
-#    - It runs scheduled jobs internally using APScheduler:
-#      * Scraping: every 15 minutes
-#      * Discovery: daily at 3am
-#      * Price updates: every minute
-#    - ENABLE_SCHEDULER=true activates the internal scheduler
-#
-# 2. Service Communication:
-#    - Services communicate via HTTPS (inter-service calls)
-#    - No API Gateway on Render free tier (would need separate service)
-#    - Frontend makes requests directly to Auth/Core services
-#
-# 3. Scaling:
-#    - Scraper Service uses "starter" plan (needs more resources for Playwright)
-#    - Other services use "free" plan
-#    - Upgrade to paid plans for production workloads
-#
-# 4. Environment Variables:
-#    - SECRET_KEY: Set manually in Render dashboard (same for all services)
-#    - MAIL_USERNAME/MAIL_PASSWORD: Set in notification-service
-#    - DATABASE_URL: Auto-generated from encheres-db
-#
-# 5. Health Checks:
-#    - All services expose /health endpoint
-#    - Render uses these for monitoring
-#
-# 6. Deployment Order:
-#    - Database first
-#    - Then all services (they can start in parallel)
-#    - Frontend last (needs service URLs)
-#
-# 7. Logs:
-#    - View logs in Render dashboard for each service
-#    - Scraper Service logs show scheduler activity
-#
-# 8. Limitations on Free Tier:
-#    - Services may sleep after 15 min of inactivity
-#    - Scraper Service on "starter" plan stays active
-#    - Consider upgrading for production
-#
-# 9. Migration from Monolith:
-#    - Old "encheres-backend" service can be deleted after testing
-#    - Update frontend VITE_API_URL to point to new services
-#    - Verify all endpoints work with new architecture
-#
-# 10. GitHub Actions:
-#     - Can be DISABLED after confirming Scraper Service works
-#     - Jobs are now handled internally by encheres-scraper-service
-#     - No more external dependencies for automation
+# Migration Notes:
+# 1. Old Python services (encheres-auth-service, encheres-core-service, etc.) are replaced
+# 2. New Node.js services have "-v2" suffix to avoid conflicts
+# 3. After testing, delete old services from Render dashboard
+# 4. Performance: Fastify is 3x faster than FastAPI
+# 5. All services use Docker with multi-stage builds
+# 6. Prisma ORM for type-safe database access
+# 7. BullMQ + Redis for async scraping jobs
+# 8. Health checks enabled on all services
+# 9. Auto-deploy on git push to master branch
