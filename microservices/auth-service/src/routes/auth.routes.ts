@@ -32,7 +32,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Logout
   fastify.post('/logout', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const token = request.headers.authorization?.split(' ')[1] || '';
@@ -48,7 +48,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Get current user
   fastify.get('/me', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const result = await authService.getCurrentUser(request.user!.userId);
@@ -63,7 +63,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Update profile
   fastify.patch('/me', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const result = await authService.updateProfile(request.user!.userId, request.body);

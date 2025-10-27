@@ -17,45 +17,43 @@ export interface AuthMiddlewareOptions {
   requireAdmin?: boolean;
 }
 
-export async function authMiddleware(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  options: AuthMiddlewareOptions = { requireAuth: true }
-) {
-  const { requireAuth = true, requireAdmin = false } = options;
+export function authMiddleware(options: AuthMiddlewareOptions = { requireAuth: true }) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const { requireAuth = true, requireAdmin = false } = options;
 
-  const authHeader = request.headers.authorization;
+    const authHeader = request.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    if (requireAuth) {
-      return reply.status(401).send({
-        success: false,
-        error: 'No authorization token provided'
-      });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      if (requireAuth) {
+        return reply.status(401).send({
+          success: false,
+          error: 'No authorization token provided'
+        });
+      }
+      return;
     }
-    return;
-  }
 
-  const token = authHeader.substring(7);
+    const token = authHeader.substring(7);
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
-    request.user = decoded;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+      request.user = decoded;
 
-    if (requireAdmin && !decoded.isAdmin) {
-      return reply.status(403).send({
-        success: false,
-        error: 'Admin access required'
-      });
+      if (requireAdmin && !decoded.isAdmin) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Admin access required'
+        });
+      }
+    } catch (error) {
+      if (requireAuth) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Invalid or expired token'
+        });
+      }
     }
-  } catch (error) {
-    if (requireAuth) {
-      return reply.status(401).send({
-        success: false,
-        error: 'Invalid or expired token'
-      });
-    }
-  }
+  };
 }
 
 export function generateToken(payload: JWTPayload): string {

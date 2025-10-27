@@ -90,7 +90,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
 
   // Favorites
   fastify.post('/:id/favorite', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const { id } = request.params as any;
@@ -105,7 +105,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.delete('/:id/favorite', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const { id } = request.params as any;
@@ -120,7 +120,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/favorites/me', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const result = await lotsService.getFavorites(request.user!.userId);
@@ -135,7 +135,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
 
   // Alerts
   fastify.post('/alerts', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const result = await lotsService.createAlert(request.user!.userId, request.body);
@@ -149,7 +149,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/alerts/me', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const result = await lotsService.getAlerts(request.user!.userId);
@@ -163,7 +163,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.delete('/alerts/:alertId', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const { alertId } = request.params as any;

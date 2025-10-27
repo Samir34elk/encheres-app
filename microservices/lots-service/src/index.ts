@@ -1,13 +1,12 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { lotsRoutes } from './routes/lots.routes';
-import logger from '../../shared/utils/logger';
 
 const PORT = parseInt(process.env.PORT || '3002', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
 const fastify = Fastify({
-  logger: logger
+  logger: { level: process.env.LOG_LEVEL || 'info', transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss Z', ignore: 'pid,hostname' } } : undefined }
 });
 
 async function start() {
@@ -28,9 +27,9 @@ async function start() {
 
     // Start server
     await fastify.listen({ port: PORT, host: HOST });
-    logger.info(`Lots service listening on ${HOST}:${PORT}`);
+    fastify.log.info(`Lots service listening on ${HOST}:${PORT}`);
   } catch (error) {
-    logger.error(error);
+    fastify.log.error(error);
     process.exit(1);
   }
 }
