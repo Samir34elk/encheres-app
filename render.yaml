@@ -198,10 +198,12 @@ services:
         value: https://encheres-frontend.onrender.com
 
   # Frontend - Static Site (React + Vite)
-  - type: static
+  - type: web
     name: encheres-frontend-v2
+    runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
+    region: frankfurt
     pullRequestPreviewsEnabled: yes
     routes:
       - type: rewrite
