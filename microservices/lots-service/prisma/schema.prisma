@@ -1,0 +1,59 @@
+// Prisma schema for lots-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Lot {
+  id             String    @id @default(uuid())
+  title          String
+  description    String?   @db.Text
+  category       String?
+  startingPrice  Float?
+  currentPrice   Float?
+  estimatedPrice Float?
+  lotNumber      String?
+  images         String[]  @default([])
+  saleId         String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  favorites Favorite[]
+
+  @@index([saleId])
+  @@index([category])
+  @@index([title])
+  @@map("lots")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  lotId     String
+  lot       Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, lotId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+model Alert {
+  id       String  @id @default(uuid())
+  userId   String
+  keywords String?
+  category String?
+  minPrice Float?
+  maxPrice Float?
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("alerts")
+}
