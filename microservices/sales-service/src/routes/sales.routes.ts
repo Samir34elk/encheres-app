@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import salesService from '../services/sales.service';
 import { authMiddleware } from '../../../shared/middleware/auth';
+import { CreateSaleRequest, Sale } from '../../../shared/types';
 
 export async function salesRoutes(fastify: FastifyInstance) {
   // Get sales with filters and pagination
@@ -52,7 +53,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
   });
 
   // Create sale (admin only)
-  fastify.post('/', {
+  fastify.post<{ Body: CreateSaleRequest }>('/', {
     preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
@@ -67,7 +68,7 @@ export async function salesRoutes(fastify: FastifyInstance) {
   });
 
   // Update sale (admin only)
-  fastify.patch('/:id', {
+  fastify.patch<{ Body: Partial<Sale> }>('/:id', {
     preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
