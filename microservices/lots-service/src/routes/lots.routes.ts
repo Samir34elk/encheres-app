@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import lotsService from '../services/lots.service';
 import { authMiddleware } from '../../../shared/middleware/auth';
+import { CreateLotRequest, Lot } from '../../../shared/types';
 
 export async function lotsRoutes(fastify: FastifyInstance) {
   // Get lots with filters and pagination
@@ -42,7 +43,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
   });
 
   // Create lot (admin only)
-  fastify.post('/', {
+  fastify.post<{ Body: CreateLotRequest }>('/', {
     preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
@@ -57,7 +58,7 @@ export async function lotsRoutes(fastify: FastifyInstance) {
   });
 
   // Update lot (admin only)
-  fastify.patch('/:id', {
+  fastify.patch<{ Body: Partial<Lot> }>('/:id', {
     preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {

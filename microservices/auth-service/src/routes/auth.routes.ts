@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import authService from '../services/auth.service';
-import { LoginRequest, RegisterRequest } from '../../../shared/types';
+import { LoginRequest, RegisterRequest, User } from '../../../shared/types';
 import { authMiddleware } from '../../../shared/middleware/auth';
 
 export async function authRoutes(fastify: FastifyInstance) {
@@ -62,7 +62,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   // Update profile
-  fastify.patch('/me', {
+  fastify.patch<{ Body: Partial<User> }>('/me', {
     preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
