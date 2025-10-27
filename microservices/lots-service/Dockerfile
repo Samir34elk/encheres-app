@@ -31,5 +31,5 @@ ENV PORT=3002
 
 EXPOSE 3002
 
-# Run migrations and start
-CMD npx prisma migrate deploy && node dist/index.js
+# Start service (no migrations - shared database with Python backend)
+CMD node dist/index.js
