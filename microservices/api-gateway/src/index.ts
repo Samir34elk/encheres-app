@@ -2,7 +2,6 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import proxy from '@fastify/http-proxy';
 import rateLimit from '@fastify/rate-limit';
-import logger from '../../shared/utils/logger';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -15,7 +14,7 @@ const SCRAPER_SERVICE = process.env.SCRAPER_SERVICE_URL || 'http://localhost:300
 const NOTIFICATIONS_SERVICE = process.env.NOTIFICATIONS_SERVICE_URL || 'http://localhost:3005';
 
 const fastify = Fastify({
-  logger: logger,
+  logger: { level: process.env.LOG_LEVEL || 'info', transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss Z', ignore: 'pid,hostname' } } : undefined },
   trustProxy: true
 });
 
@@ -103,15 +102,15 @@ async function start() {
 
     // Start server
     await fastify.listen({ port: PORT, host: HOST });
-    logger.info(`API Gateway listening on ${HOST}:${PORT}`);
-    logger.info('Service routes:');
-    logger.info(`  Auth: ${AUTH_SERVICE}`);
-    logger.info(`  Lots: ${LOTS_SERVICE}`);
-    logger.info(`  Sales: ${SALES_SERVICE}`);
-    logger.info(`  Scraper: ${SCRAPER_SERVICE}`);
-    logger.info(`  Notifications: ${NOTIFICATIONS_SERVICE}`);
+    fastify.log.info(`API Gateway listening on ${HOST}:${PORT}`);
+    fastify.log.info('Service routes:');
+    fastify.log.info(`  Auth: ${AUTH_SERVICE}`);
+    fastify.log.info(`  Lots: ${LOTS_SERVICE}`);
+    fastify.log.info(`  Sales: ${SALES_SERVICE}`);
+    fastify.log.info(`  Scraper: ${SCRAPER_SERVICE}`);
+    fastify.log.info(`  Notifications: ${NOTIFICATIONS_SERVICE}`);
   } catch (error) {
-    logger.error(error);
+    fastify.log.error(error);
     process.exit(1);
   }
 }

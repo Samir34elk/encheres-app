@@ -5,7 +5,7 @@ import { authMiddleware } from '../../../shared/middleware/auth';
 export async function notificationsRoutes(fastify: FastifyInstance) {
   // Get user notifications
   fastify.get('/me', {
-    preHandler: authMiddleware
+    preHandler: authMiddleware()
   }, async (request, reply) => {
     try {
       const result = await notificationService.getUserNotifications(request.user!.userId);

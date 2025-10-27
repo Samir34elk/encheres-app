@@ -2,13 +2,12 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { scraperRoutes } from './routes/scraper.routes';
 import { scheduleScrapingJob } from './queue/scraper.queue';
-import logger from '../../shared/utils/logger';
 
 const PORT = parseInt(process.env.PORT || '3004', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
 const fastify = Fastify({
-  logger: logger
+  logger: { level: process.env.LOG_LEVEL || 'info', transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss Z', ignore: 'pid,hostname' } } : undefined }
 });
 
 async function start() {
@@ -32,9 +31,9 @@ async function start() {
 
     // Start server
     await fastify.listen({ port: PORT, host: HOST });
-    logger.info(`Scraper service listening on ${HOST}:${PORT}`);
+    fastify.log.info(`Scraper service listening on ${HOST}:${PORT}`);
   } catch (error) {
-    logger.error(error);
+    fastify.log.error(error);
     process.exit(1);
   }
 }
