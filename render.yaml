@@ -1,19 +1,9 @@
 # Render Blueprint - Node.js/TypeScript Microservices
 # Complete rewrite from Python to Node.js for better performance
-
-databases:
-  - name: encheres-postgres
-    databaseName: encheres
-    user: encheres
-    region: frankfurt
-    plan: free
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: Allow all (required for Render services)
+# Uses existing database: encheres-db (dpg-d3qns7vdiees73agmvcg-a)
+# Uses existing Redis: encheres-redis (red-d3vck87diees73esn4a0)
 
 services:
-  # PostgreSQL Database (defined above in databases section)
-  # Redis (encheres-redis) created separately - ID: red-d3vck87diees73esn4a0
 
   # Auth Service - JWT Authentication
   - type: web
@@ -30,13 +20,11 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        fromDatabase:
-          name: encheres-postgres
-          property: connectionString
+        sync: false  # Set manually to encheres-db connection string
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://encheres-frontend.onrender.com
+        value: https://encheres.onrender.com
 
   # Lots Service - Lots, Favorites, Alerts
   - type: web
@@ -53,13 +41,11 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        fromDatabase:
-          name: encheres-postgres
-          property: connectionString
+        sync: false  # Set manually to encheres-db connection string
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
-        value: https://encheres-frontend.onrender.com
+        value: https://encheres.onrender.com
 
   # Sales Service - Sales Management
   - type: web
@@ -76,13 +62,11 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        fromDatabase:
-          name: encheres-postgres
-          property: connectionString
+        sync: false  # Set manually to encheres-db connection string
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
-        value: https://encheres-frontend.onrender.com
+        value: https://encheres.onrender.com
 
   # Scraper Service - Web Scraping with Puppeteer + BullMQ
   - type: web
@@ -111,7 +95,7 @@ services:
           type: web
           property: hostport
       - key: CORS_ORIGIN
-        value: https://encheres-frontend.onrender.com
+        value: https://encheres.onrender.com
 
   # Notifications Service - Emails
   - type: web
@@ -128,13 +112,11 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        fromDatabase:
-          name: encheres-postgres
-          property: connectionString
+        sync: false  # Set manually to encheres-db connection string
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
-        value: https://encheres-frontend.onrender.com
+        value: https://encheres.onrender.com
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT
@@ -188,11 +170,11 @@ services:
           type: web
           property: hostport
       - key: CORS_ORIGIN
-        value: https://encheres-frontend.onrender.com
+        value: https://encheres.onrender.com
 
   # Frontend - Static Site (React + Vite)
   - type: web
-    name: encheres-frontend-v2
+    name: encheres
     runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
