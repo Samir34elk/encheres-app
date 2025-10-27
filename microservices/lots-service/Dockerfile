@@ -23,7 +23,7 @@ RUN npm install
 RUN npx prisma generate
 
 # Build TypeScript
-RUN npm run build && ls -la dist/
+RUN npm run build && pwd && ls -la && ls -la dist/
 
 # Set production environment
 ENV NODE_ENV=production
