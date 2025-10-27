@@ -5,7 +5,7 @@ import { authMiddleware } from '../../../shared/middleware/auth';
 export async function scraperRoutes(fastify: FastifyInstance) {
   // Trigger scraping manually (admin only)
   fastify.post('/trigger', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const job = await scraperQueue.add('scrape-encheres', {});
@@ -25,7 +25,7 @@ export async function scraperRoutes(fastify: FastifyInstance) {
 
   // Get scraping job status
   fastify.get('/status/:jobId', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const { jobId } = request.params as any;
@@ -60,7 +60,7 @@ export async function scraperRoutes(fastify: FastifyInstance) {
 
   // Get recent scraping jobs
   fastify.get('/jobs', {
-    preHandler: (req, rep) => authMiddleware(req, rep, { requireAdmin: true })
+    preHandler: authMiddleware({ requireAdmin: true })
   }, async (request, reply) => {
     try {
       const completed = await scraperQueue.getCompleted(0, 10);
