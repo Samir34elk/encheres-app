@@ -19,11 +19,8 @@ COPY lots-service/src ./lots-service/src/
 WORKDIR /app/lots-service
 RUN npm install
 
-# Generate Prisma client
-RUN npx prisma generate
-
-# Build TypeScript
-RUN npm run build && ls -laR dist/ | head -50
+# Build TypeScript (without Prisma generate - will be done at runtime)
+RUN npm run build
 
 # Set production environment
 ENV NODE_ENV=production
@@ -31,5 +28,5 @@ ENV PORT=3002
 
 EXPOSE 3002
 
-# Start service (no migrations - shared database with Python backend)
-CMD ["node", "dist/index.js"]
+# Generate Prisma client at startup and then start service
+CMD ["sh", "-c", "npx prisma generate && node dist/index.js"]

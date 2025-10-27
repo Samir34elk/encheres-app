@@ -19,10 +19,7 @@ COPY notifications-service/src ./notifications-service/src/
 WORKDIR /app/notifications-service
 RUN npm install
 
-# Generate Prisma client
-RUN npx prisma generate
-
-# Build TypeScript
+# Build TypeScript (without Prisma generate - will be done at runtime)
 RUN npm run build
 
 # Set production environment
@@ -31,5 +28,5 @@ ENV PORT=3005
 
 EXPOSE 3005
 
-# Start service (no migrations - shared database with Python backend)
-CMD ["node", "dist/index.js"]
+# Generate Prisma client at startup and then start service
+CMD ["sh", "-c", "npx prisma generate && node dist/index.js"]

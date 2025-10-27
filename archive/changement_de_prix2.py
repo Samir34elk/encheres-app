@@ -4,12 +4,11 @@ from tkinter import Tk, messagebox
 import time
 
 urls_data = {
-    "https://encheres-domaine.gouv.fr/lot/ar-volkswagen-golf-vii-agrasc.html": ("Golf 7 Gti", "197"),
-    "https://encheres-domaine.gouv.fr/lot/2506031br00830.html": ("Clio 4", "141"),
-    "https://encheres-domaine.gouv.fr/lot/renault-clio-doo-37.html": ("Clio 3 2eme", "132"),
-    "https://encheres-domaine.gouv.fr/lot/26vl2025-1.html": ("DS3", "151"),
-    "https://encheres-domaine.gouv.fr/lot/dc-538-vp-1.html": ("Partner", "208"),
-    "https://encheres-domaine.gouv.fr/lot/lot-de-4-trottinettes-electriques.html": ("trottinettes", "134"),
+    "https://encheres-domaine.gouv.fr/lot/honda-crf-150-r.html": ("Crf bon etat", "50"),
+    "https://encheres-domaine.gouv.fr/lot/honda-crf-150-r-doo-1.html": ("crf mauvais etat", "51"),
+    "https://encheres-domaine.gouv.fr/lot/68b6e95cb0058.html": ("kisbee", "62"),
+    "https://encheres-domaine.gouv.fr/lot/250421bi01601.html": ("vespa", "59"),
+    "https://encheres-domaine.gouv.fr/lot/quadyamahacw008af-1.html": ("raptor", "64"),
 }
 
 def show_alert(message):
@@ -57,7 +56,7 @@ def monitor():
                 if new_prix != info["prix"]:
                     message = f"💰 Le prix de '{info['titre']}' (lot {info['num']}) a changé : {info['prix']} → {new_prix}"
                     print(message)
-                    #Thread(target=show_alert, args=(message,), daemon=True).start()
+                    Thread(target=show_alert, args=(message,), daemon=True).start()
 
                 pages[url]["prix"] = new_prix
                 print(f"Rafraîchi: {info['titre']} - {new_prix}")
