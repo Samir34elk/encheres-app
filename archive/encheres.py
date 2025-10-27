@@ -15,7 +15,7 @@ with sync_playwright() as p:
     context = browser.new_context(ignore_https_errors=True)
     page = context.new_page()
 
-    numero_de_vente = 42
+    numero_de_vente = 87
     page_number = 1
     all_data = []
 

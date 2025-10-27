@@ -1,5 +1,4 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
 import encheresScraper, { ScrapedSale } from '../scrapers/encheres-domaine.scraper';
 import logger from '../../../shared/utils/logger';
 import axios from 'axios';
@@ -7,8 +6,6 @@ import axios from 'axios';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const SALES_SERVICE_URL = process.env.SALES_SERVICE_URL || 'http://localhost:3003';
 const LOTS_SERVICE_URL = process.env.LOTS_SERVICE_URL || 'http://localhost:3002';
-
-const prisma = new PrismaClient();
 
 // Create queue
 export const scraperQueue = new Queue('scraper', {

@@ -1,7 +1,15 @@
 # Render Blueprint - Node.js/TypeScript Microservices
-# Complete rewrite from Python to Node.js for better performance
+# Version 2 - Fixed Configuration
 # Uses existing database: encheres-db (dpg-d3qns7vdiees73agmvcg-a)
 # Uses existing Redis: encheres-redis (red-d3vck87diees73esn4a0)
+#
+# IMPORTANT: All Dockerfiles are in /microservices/ directory
+# dockerContext MUST be ./microservices for COPY commands to work
+#
+# Build process fixed:
+# - Prisma generate moved to runtime (CMD)
+# - package-lock.json generated for all services
+# - All TypeScript builds tested successfully
 
 services:
 
