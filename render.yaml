@@ -20,7 +20,9 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false  # Set manually to encheres-db connection string
+        fromDatabase:
+          name: encheres-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
@@ -41,7 +43,9 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false  # Set manually to encheres-db connection string
+        fromDatabase:
+          name: encheres-db
+          property: connectionString
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
@@ -62,7 +66,9 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false  # Set manually to encheres-db connection string
+        fromDatabase:
+          name: encheres-db
+          property: connectionString
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
@@ -112,7 +118,9 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false  # Set manually to encheres-db connection string
+        fromDatabase:
+          name: encheres-db
+          property: connectionString
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
