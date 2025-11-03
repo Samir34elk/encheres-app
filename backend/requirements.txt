@@ -38,7 +38,7 @@ reportlab==4.0.7
 # Utilities
 pydantic==2.5.0
 pydantic-settings==2.1.0
-httpx==0.25.1
+httpx==0.28.1
 aiofiles==23.2.1
 
 # Testing
