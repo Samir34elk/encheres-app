@@ -12,11 +12,25 @@ from app.core.config import settings
 from app.db.session import get_db, AsyncSessionLocal
 from app.services.batch_scraper import BatchAuctionScraper
 from app.services.sale_discovery import SaleDiscoveryService
+from app.scheduler.jobs import SchedulerService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 SCRAPER_DISABLED_MESSAGE = "Internal scraping is disabled. Use the ingestion workflow instead."
+
+
+def get_scheduler() -> SchedulerService:
+    """Expose the running scheduler instance (configured in app.main)."""
+    try:
+        from app.main import scheduler
+        return scheduler
+    except Exception as exc:  # pragma: no cover
+        logger.error("Scheduler not available: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Scheduler not available"
+        )
 
 
 async def verify_cron_secret(x_cron_secret: str = Header(None)):
@@ -242,33 +256,23 @@ async def force_scrape_all(
 
 @router.get("/jobs-status")
 async def get_jobs_status(
-    db: AsyncSession = Depends(get_db)
+    _: None = Depends(verify_cron_secret),
+    scheduler: SchedulerService = Depends(get_scheduler)
 ):
     """
-    Get the status of scheduled jobs.
-    Returns information about last execution times.
-
-    Note: This is a basic implementation. For production, consider storing
-    job execution history in the database.
+    Return real-time information about the internal scheduler jobs.
+    Includes job id, name, trigger and next run time.
     """
-    # TODO: Implement job execution history tracking in database
-    # For now, return basic info
+    jobs = [{
+        "id": job.id,
+        "name": job.name,
+        "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+        "trigger": str(job.trigger)
+    } for job in scheduler.get_jobs()]
 
     return {
-        "scheduler": "external (GitHub Actions)",
-        "jobs": [
-            {
-                "name": "scrape_sales",
-                "schedule": f"Every {settings.SCRAPER_INTERVAL_MINUTES} minutes",
-                "endpoint": "/api/v1/scheduler/trigger-scraping"
-            },
-            {
-                "name": "discover_sales",
-                "schedule": "Daily at 03:00 UTC",
-                "endpoint": "/api/v1/scheduler/trigger-discovery"
-            }
-        ],
-        "note": "Job history tracking not yet implemented"
+        "scheduler": "internal",
+        "jobs": jobs
     }
 
 

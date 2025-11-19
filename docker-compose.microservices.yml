@@ -60,8 +60,8 @@ services:
   # Auth Service (Port 8001)
   auth-service:
     build:
-      context: ./services
-      dockerfile: auth-service/Dockerfile
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     container_name: auth_service
     ports:
       - "8001:8001"
@@ -72,6 +72,11 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DEBUG=false
+      - COOKIE_DOMAIN=localhost
+      - GOOGLE_CLIENT_ID=dummy-google-client-id
+      - GOOGLE_CLIENT_SECRET=dummy-google-client-secret
+      - GITHUB_CLIENT_ID=dummy-github-client-id
+      - GITHUB_CLIENT_SECRET=dummy-github-client-secret
     volumes:
       - ./services/auth-service:/app
       - ./services/shared:/app/shared
@@ -89,8 +94,8 @@ services:
   # Core Service (Port 8002)
   core-service:
     build:
-      context: ./services
-      dockerfile: core-service/Dockerfile
+      context: .
+      dockerfile: services/core-service/Dockerfile
     container_name: core_service
     ports:
       - "8002:8002"
@@ -121,8 +126,8 @@ services:
   # Scraper Service (Port 8003) - REPLACES GITHUB ACTIONS
   scraper-service:
     build:
-      context: ./services
-      dockerfile: scraper-service/Dockerfile
+      context: .
+      dockerfile: services/scraper-service/Dockerfile
     container_name: scraper_service
     ports:
       - "8003:8003"
@@ -138,10 +143,14 @@ services:
       - ENABLE_PRICE_UPDATES=true
       - AUCTION_BASE_URL=https://encheres-domaine.gouv.fr
       - CORE_SERVICE_URL=http://core-service:8002
+      - CRON_SECRET=${CRON_SECRET:-dev-cron-secret}
+      - API_BASE_URL=http://core-service:8002/api/v1
+      - EXTRA_APP_PATH=/core-services
     volumes:
       - ./services/scraper-service:/app
       - ./services/shared:/app/shared
       - ./scripts:/app/scripts
+      - ./services/core-service:/core-services:ro
     depends_on:
       db:
         condition: service_healthy
@@ -158,8 +167,8 @@ services:
   # Notification Service (Port 8004)
   notification-service:
     build:
-      context: ./services
-      dockerfile: notification-service/Dockerfile
+      context: .
+      dockerfile: services/notification-service/Dockerfile
     container_name: notification_service
     ports:
       - "8004:8004"
@@ -174,9 +183,11 @@ services:
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - MAIL_FROM=${MAIL_FROM}
       - MAIL_SERVER=${MAIL_SERVER:-smtp.gmail.com}
+      - EXTRA_APP_PATH=/core-services
     volumes:
       - ./services/notification-service:/app
       - ./services/shared:/app/shared
+      - ./services/core-service:/core-services:ro
     depends_on:
       db:
         condition: service_healthy
@@ -191,8 +202,8 @@ services:
   # Admin Service (Port 8005)
   admin-service:
     build:
-      context: ./services
-      dockerfile: admin-service/Dockerfile
+      context: .
+      dockerfile: services/admin-service/Dockerfile
     container_name: admin_service
     ports:
       - "8005:8005"
@@ -205,9 +216,11 @@ services:
       - DEBUG=false
       - AUTH_SERVICE_URL=http://auth-service:8001
       - CORE_SERVICE_URL=http://core-service:8002
+      - EXTRA_APP_PATH=/core-services
     volumes:
       - ./services/admin-service:/app
       - ./services/shared:/app/shared
+      - ./services/core-service:/core-services:ro
     depends_on:
       db:
         condition: service_healthy

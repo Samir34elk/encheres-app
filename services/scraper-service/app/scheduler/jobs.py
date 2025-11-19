@@ -15,8 +15,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
-# Add scripts to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../scripts"))
+# Add scripts directory (legacy GitHub Actions) to sys.path
+SCRIPTS_PATH = os.getenv("SCRIPTS_PATH", "/app/scripts")
+if os.path.isdir(SCRIPTS_PATH):
+    sys.path.insert(0, SCRIPTS_PATH)
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal

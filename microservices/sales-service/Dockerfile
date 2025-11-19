@@ -1,32 +1,33 @@
 FROM node:20-alpine
 
-# Install OpenSSL for Prisma
+# Pour Prisma
 RUN apk add --no-cache openssl
 
-WORKDIR /app
-
-# Copy shared code
-COPY shared/ ./shared/
-RUN cd shared && npm install
-
-# Copy service code
-COPY sales-service/package*.json ./sales-service/
-COPY sales-service/tsconfig.json ./sales-service/
-COPY sales-service/prisma ./sales-service/prisma/
-COPY sales-service/src ./sales-service/src/
-
-# Install dependencies
+# On travaille dans /app/sales-service
 WORKDIR /app/sales-service
+
+# On copie d’abord les package.json pour profiter du cache Docker
+COPY sales-service/package*.json ./
+
+# Installer les dépendances du service
 RUN npm install
 
-# Build TypeScript (without Prisma generate - will be done at runtime)
+# Copier le reste du code du service (src, prisma, tsconfig, etc.)
+COPY sales-service/ ./
+
+# Copier le code partagé
+COPY shared/ ../shared/
+
+# Permettre au code partagé de résoudre les dépendances
+RUN ln -s /app/sales-service/node_modules /app/node_modules
+
+# Build TypeScript
 RUN npm run build
 
-# Set production environment
 ENV NODE_ENV=production
 ENV PORT=3003
 
 EXPOSE 3003
 
-# Generate Prisma client at startup and then start service
-CMD ["sh", "-c", "npx prisma generate && node dist/index.js"]
+# Prisma generate + lancement du vrai index compilé
+CMD ["sh", "-c", "npx prisma generate && node dist/sales-service/src/index.js"]

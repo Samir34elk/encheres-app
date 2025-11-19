@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.db.session import init_db
+from app.api import sales, lots, favorites, alerts
 
 # Configure logging
 logging.basicConfig(
@@ -50,9 +51,10 @@ app.add_middleware(
     max_age=600,
 )
 
-# TODO: Include API routers
-# from app.api import router as api_router
-# app.include_router(api_router, prefix="/api/v1")
+app.include_router(sales.router, prefix="/api/v1/sales", tags=["sales"])
+app.include_router(lots.router, prefix="/api/v1/lots", tags=["lots"])
+app.include_router(favorites.router, prefix="/api/v1/favorites", tags=["favorites"])
+app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["alerts"])
 
 
 @app.get("/")

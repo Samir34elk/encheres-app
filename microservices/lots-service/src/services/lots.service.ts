@@ -155,7 +155,7 @@ export class LotsService {
       include: { lot: true }
     });
 
-    const lots = favorites.map(f => f.lot);
+    const lots = favorites.map((favorite: { lot: Lot }) => favorite.lot);
 
     return {
       success: true,

@@ -20,6 +20,9 @@ class BaseServiceConfig(BaseSettings):
     # Database
     DATABASE_URL: Optional[str] = Field(default=None)
     DATABASE_URL_SYNC: Optional[str] = Field(default=None)
+    DB_POOL_SIZE: int = Field(default=5)
+    DB_MAX_OVERFLOW: int = Field(default=10)
+    DB_POOL_RECYCLE: int = Field(default=1800)
 
     # Redis
     REDIS_URL: str = Field(default="redis://redis:6379/0")
