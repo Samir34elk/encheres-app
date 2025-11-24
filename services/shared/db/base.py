@@ -1,0 +1,7 @@
+"""Declarative base shared across all microservices."""
+from sqlalchemy.orm import declarative_base
+
+
+Base = declarative_base()
+
+__all__ = ["Base"]
