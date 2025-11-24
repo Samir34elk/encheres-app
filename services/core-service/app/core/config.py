@@ -19,7 +19,7 @@ class CoreServiceConfig(BaseServiceConfig):
     PORT: int = Field(default=8002)
 
     # API specific settings
-    MAX_PAGE_SIZE: int = Field(default=50)
+    MAX_PAGE_SIZE: int = Field(default=10000)
     CRON_SECRET: str = Field(default="dev-cron-secret")
 
 

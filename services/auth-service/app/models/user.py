@@ -43,10 +43,10 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
 
     # Relationships
-    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
-    alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
-    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
-    comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
+    #favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+    #alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
+    #notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    #comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email}>"
