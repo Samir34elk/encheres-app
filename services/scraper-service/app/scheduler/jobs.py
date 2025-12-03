@@ -71,7 +71,7 @@ class SchedulerService:
                 from shared.models.sale import Sale
                 result = await db.execute(
                     select(Sale)
-                    .where(Sale.is_active == 1)
+                    .where(Sale.status == "active")
                     .order_by(Sale.start_date.desc())
                     .limit(50)  # Limiter aux 50 ventes les plus récentes
                 )
