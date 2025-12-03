@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -13,6 +13,10 @@ class LotBase(BaseModel):
     depot_location: Optional[str] = None
     url: Optional[str] = None
     image_url: Optional[str] = None
+    categories: Optional[List[str]] = None
+    caracteristiques: Optional[Dict[str, Any]] = None
+    professionnel: bool = False
+    price_reserve: Optional[int] = None
 
 
 class LotCreate(LotBase):
@@ -30,6 +34,10 @@ class LotUpdate(BaseModel):
     url: Optional[str] = None
     image_url: Optional[str] = None
     is_active: Optional[int] = None
+    categories: Optional[List[str]] = None
+    caracteristiques: Optional[Dict[str, Any]] = None
+    professionnel: Optional[bool] = None
+    price_reserve: Optional[int] = None
 
 
 class LotResponse(LotBase):

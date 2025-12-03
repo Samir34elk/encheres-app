@@ -56,18 +56,44 @@ class AuctionDataIngestionService:
             if payload.end_date is not None and payload.end_date != sale.end_date:
                 sale.end_date = payload.end_date
                 updated_fields["end_date"] = payload.end_date
+            # Nouveaux champs GraphQL
+            if hasattr(payload, 'organiser') and payload.organiser and payload.organiser != sale.organiser:
+                sale.organiser = payload.organiser
+                updated_fields["organiser"] = payload.organiser
+            if hasattr(payload, 'type_vente') and payload.type_vente and payload.type_vente != sale.type_vente:
+                sale.type_vente = payload.type_vente
+                updated_fields["type_vente"] = payload.type_vente
+            if hasattr(payload, 'categories') and payload.categories is not None:
+                sale.categories = payload.categories
+                updated_fields["categories"] = payload.categories
+            if hasattr(payload, 'image_url') and payload.image_url and payload.image_url != sale.image_url:
+                sale.image_url = payload.image_url
+                updated_fields["image_url"] = payload.image_url
         else:
-            sale = Sale(
-                sale_number=payload.sale_number,
-                title=payload.title or f"Vente {payload.sale_number}",
-                description=payload.description,
-                status=payload.status or "active",
-                url=payload.url,
-                start_date=payload.start_date,
-                end_date=payload.end_date,
-                total_lots=0,
-                is_scraped=True,
-            )
+            sale_data = {
+                "sale_number": payload.sale_number,
+                "title": payload.title or f"Vente {payload.sale_number}",
+                "description": payload.description,
+                "status": payload.status or "active",
+                "url": payload.url,
+                "start_date": payload.start_date,
+                "end_date": payload.end_date,
+                "total_lots": 0,
+                "is_scraped": True,
+            }
+            # Ajouter les nouveaux champs s'ils existent
+            if hasattr(payload, 'organiser') and payload.organiser:
+                sale_data["organiser"] = payload.organiser
+            else:
+                sale_data["organiser"] = "Domaine Public"  # Valeur par défaut
+            if hasattr(payload, 'type_vente') and payload.type_vente:
+                sale_data["type_vente"] = payload.type_vente
+            if hasattr(payload, 'categories') and payload.categories:
+                sale_data["categories"] = payload.categories
+            if hasattr(payload, 'image_url') and payload.image_url:
+                sale_data["image_url"] = payload.image_url
+
+            sale = Sale(**sale_data)
             self.db.add(sale)
             await self.db.flush()
             logger.info("Created sale #%s during ingestion", payload.sale_number)
@@ -153,9 +179,30 @@ class AuctionDataIngestionService:
             has_changes = False
 
             for attr in ("title", "description", "status", "depot_location", "url", "image_url"):
-                new_value = getattr(lot_payload, attr)
+                new_value = getattr(lot_payload, attr, None)
                 if new_value is not None and new_value != getattr(existing, attr):
                     setattr(existing, attr, new_value)
+                    has_changes = True
+
+            # Nouveaux champs GraphQL (JSONB et Boolean)
+            for attr in ("categories", "caracteristiques"):
+                if hasattr(lot_payload, attr):
+                    new_value = getattr(lot_payload, attr)
+                    if new_value is not None and new_value != getattr(existing, attr):
+                        setattr(existing, attr, new_value)
+                        has_changes = True
+
+            # Champ professionnel (Boolean)
+            if hasattr(lot_payload, 'professionnel') and lot_payload.professionnel is not None:
+                new_prof = lot_payload.professionnel
+                if new_prof != existing.professionnel:
+                    existing.professionnel = new_prof
+                    has_changes = True
+
+            # Champ price_reserve
+            if hasattr(lot_payload, 'price_reserve') and lot_payload.price_reserve is not None:
+                if lot_payload.price_reserve != getattr(existing, 'price_reserve', None):
+                    existing.price_reserve = lot_payload.price_reserve
                     has_changes = True
 
             if price is not None and price != existing.price:
@@ -178,18 +225,31 @@ class AuctionDataIngestionService:
                 await self._record_price_change(existing.id, price, lot_payload.status)
                 await self.notifications.trigger_price_alerts(existing, price, previous_price)
         else:
-            new_lot = Lot(
-                sale_id=sale.id,
-                lot_number=lot_payload.lot_number,
-                title=lot_payload.title,
-                description=lot_payload.description,
-                price=price,
-                status=lot_payload.status,
-                depot_location=lot_payload.depot_location,
-                url=lot_payload.url,
-                image_url=lot_payload.image_url,
-                is_active=1 if lot_payload.is_active is not False else 0,
-            )
+            lot_data = {
+                "sale_id": sale.id,
+                "lot_number": lot_payload.lot_number,
+                "title": lot_payload.title,
+                "description": lot_payload.description,
+                "price": price,
+                "status": lot_payload.status,
+                "depot_location": lot_payload.depot_location,
+                "url": lot_payload.url,
+                "image_url": lot_payload.image_url,
+                "is_active": 1 if lot_payload.is_active is not False else 0,
+            }
+            # Ajouter les nouveaux champs s'ils existent
+            if hasattr(lot_payload, 'categories') and lot_payload.categories is not None:
+                lot_data["categories"] = lot_payload.categories
+            if hasattr(lot_payload, 'caracteristiques') and lot_payload.caracteristiques is not None:
+                lot_data["caracteristiques"] = lot_payload.caracteristiques
+            if hasattr(lot_payload, 'professionnel') and lot_payload.professionnel is not None:
+                lot_data["professionnel"] = lot_payload.professionnel
+            else:
+                lot_data["professionnel"] = False  # Valeur par défaut
+            if hasattr(lot_payload, 'price_reserve') and lot_payload.price_reserve is not None:
+                lot_data["price_reserve"] = lot_payload.price_reserve
+
+            new_lot = Lot(**lot_data)
             self.db.add(new_lot)
             await self.db.flush()
             stats["new_lots"] += 1

@@ -33,8 +33,11 @@ frontend/dist/
 .env.*.local
 
 # IDEs
+archive/
 .vscode/
 .idea/
+.claude/
+.github/
 *.swp
 *.swo
 *~
@@ -80,3 +83,5 @@ encheres.csv
 *.bak
 *.backup
 CRON_SECRET.txt
+
+*.md
