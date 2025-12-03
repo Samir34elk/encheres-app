@@ -89,10 +89,10 @@ class PriceHistory(Base):
 
     # ========== Colonnes de Données ==========
 
-    # price : Prix du lot au moment de l'enregistrement (en centimes d'euros)
+    # price : Prix du lot au moment de l'enregistrement (en euros, entier)
     # Impact : Valeur historique pour calcul de variations
-    # Format : Integer (centimes) pour éviter les erreurs de précision des Float
-    # Exemple : 15000 = 150.00€, 1250 = 12.50€
+    # Format : Integer (euros)
+    # Exemple : 1500 = 1500€, 125 = 125€
     # Nullable : False car on doit toujours avoir un prix
     # Utilisation :
     #   - Graphique d'évolution : tracé de la courbe de prix

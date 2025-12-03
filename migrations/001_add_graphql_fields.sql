@@ -107,7 +107,7 @@ ON lots (professionnel);
 COMMENT ON COLUMN lots.categories IS 'Catégories du lot (array JSON)';
 COMMENT ON COLUMN lots.caracteristiques IS 'Caractéristiques techniques (object JSON clé-valeur)';
 COMMENT ON COLUMN lots.professionnel IS 'Réservé aux professionnels uniquement';
-COMMENT ON COLUMN lots.price_reserve IS 'Prix de réserve en centimes';
+COMMENT ON COLUMN lots.price_reserve IS 'Prix de réserve en euros';
 COMMENT ON COLUMN lots.image_url_new IS 'URLs des images (array JSON) - remplacera image_url';
 
 

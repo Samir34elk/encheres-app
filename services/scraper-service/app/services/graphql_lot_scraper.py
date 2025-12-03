@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -357,15 +357,15 @@ class GraphQLLotScraper:
 
         return result
 
-    def _convert_price_to_cents(self, value: Optional[Any]) -> Optional[int]:
+    def _parse_price_value(self, value: Optional[Any]) -> Optional[int]:
         """
-        Convertit un prix GraphQL (euros string/float) en centimes (int).
+        Convertit un prix GraphQL en entier (euros).
 
         Args:
-            value: Valeur retournée par GraphQL (peut être str, float, int)
+            value: Valeur retournée par GraphQL (str, float, int)
 
         Returns:
-            Montant en centimes ou None si invalide.
+            Montant en euros (int) ou None si invalide.
         """
         if value in (None, ""):
             return None
@@ -375,9 +375,8 @@ class GraphQLLotScraper:
         except (InvalidOperation, ValueError, TypeError):
             return None
 
-        # Utiliser quantize n'est pas nécessaire ici, int() suffit car Decimal
-        # représente déjà exactement 2 décimales pour ces montants.
-        return int(decimal_value * 100)
+        integral_value = decimal_value.to_integral_value(rounding=ROUND_HALF_UP)
+        return int(integral_value)
 
     def _parse_categories(self, categories: List[Dict[str, Any]]) -> List[str]:
         """Parse les catégories en liste de noms"""
@@ -457,10 +456,10 @@ class GraphQLLotScraper:
         # Images
         images = self._parse_images(product.get("media_gallery_entries", []))
 
-        # Prix actuel (last_bid prioritaire sinon price_auction), en centimes
-        price = self._convert_price_to_cents(product.get("last_bid"))
+        # Prix actuel (last_bid prioritaire sinon price_auction), en euros
+        price = self._parse_price_value(product.get("last_bid"))
         if price is None:
-            price = self._convert_price_to_cents(product.get("price_auction"))
+            price = self._parse_price_value(product.get("price_auction"))
 
         # Localisation
         depot_location = self._parse_dropoff_location(product.get("dropoff_location_fo"))
@@ -599,12 +598,12 @@ class GraphQLLotScraper:
         description = desc.get("html", "") or short_desc.get("html", "")
 
         # Prix courant: privilégier last_bid sinon price_auction (tous en euros)
-        price = self._convert_price_to_cents(lot_data.get("last_bid"))
+        price = self._parse_price_value(lot_data.get("last_bid"))
         if price is None:
-            price = self._convert_price_to_cents(lot_data.get("price_auction"))
+            price = self._parse_price_value(lot_data.get("price_auction"))
 
-        # Prix de réserve - API retourne en euros, convertir en centimes
-        price_reserve = self._convert_price_to_cents(lot_data.get("reserve_price"))
+        # Prix de réserve - également en euros
+        price_reserve = self._parse_price_value(lot_data.get("reserve_price"))
 
         # Localisation
         dropoff = lot_data.get("dropoff_location") or {}

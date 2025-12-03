@@ -117,17 +117,17 @@ class Lot(Base):
 
     # ========== Colonnes Commerciales ==========
 
-    # price : Prix actuel ou final du lot (en centimes d'euros)
+    # price : Prix actuel ou final du lot (en euros, entier)
     # Impact : Utilisé pour tri, filtrage, alertes de prix
-    # Format : Integer (centimes) pour éviter les erreurs de précision des Float
-    # Exemple : 15000 = 150.00€, 1250 = 12.50€
+    # Format : Integer (représente des euros, pas de centimes sur cette source)
+    # Exemple : 1500 = 1500€, 125 = 125€
     # Nullable : True car le prix peut être inconnu ou "sur demande"
     # Mise à jour : Génère une entrée PriceHistory à chaque changement
     price = Column(Integer, nullable=True)
 
     # price_reserve : Prix de réserve du lot (prix minimum pour vente)
     # Impact : Utilisé pour afficher "Prix de réserve" et gérer les enchères
-    # Format : Integer (centimes) comme price
+    # Format : Integer (euros)
     # Nullable : True car tous les lots n'ont pas de prix de réserve
     # Utilisation : Logique d'enchères, affichage conditionnel
     price_reserve = Column(Integer, nullable=True)

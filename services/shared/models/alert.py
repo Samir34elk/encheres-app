@@ -136,12 +136,12 @@ class Alert(Base):
     # Utilisation : Alertes génériques "nouveaux lots contenant X"
     keyword = Column(String, nullable=True)
 
-    # target_price : Prix seuil pour les alertes de prix (en centimes d'euros)
+    # target_price : Prix seuil pour les alertes de prix (en euros)
     # Impact : Condition de déclenchement pour PRICE_BELOW
-    # Format : Integer (centimes), ex: 50000 = 500.00€
+    # Format : Integer (euros), ex: 500 = 500€
     # Nullable : True, utilisé uniquement pour PRICE_BELOW
     # Logique : Alerte déclenchée si lot.price < target_price
-    # Exemple : target_price=100000 → alerte si prix passe sous 1000€
+    # Exemple : target_price=1000 → alerte si prix passe sous 1000€
     target_price = Column(Integer, nullable=True)
 
     # location : Localisation géographique pour filtrer les alertes
