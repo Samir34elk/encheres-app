@@ -255,7 +255,7 @@ class GraphQLAuctionScraper:
         }
 
     def _parse_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
-        """Parse une date ISO 8601 en datetime"""
+        """Parse une date ISO 8601 en datetime (naive, sans timezone)"""
         if not date_str:
             return None
         try:
@@ -263,8 +263,10 @@ class GraphQLAuctionScraper:
             return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
         except ValueError:
             try:
-                # Format ISO: "2025-01-15T00:00:00"
-                return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                # Format ISO: "2025-01-15T00:00:00" - convert to naive datetime
+                dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                # Remove timezone info to make it naive
+                return dt.replace(tzinfo=None)
             except ValueError:
                 logger.warning(f"Could not parse date: {date_str}")
                 return None
