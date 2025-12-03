@@ -436,12 +436,6 @@ class GraphQLLotScraper:
 
         # Prix actuel (last_bid = enchère actuelle, sinon price_auction = mise à prix)
         price = product.get("last_bid") or product.get("price_auction")
-        if price is not None:
-            try:
-                # Convertir euros → centimes (x100)
-                price = int(float(price) * 100)
-            except (ValueError, TypeError):
-                price = None
 
         # Localisation
         depot_location = self._parse_dropoff_location(product.get("dropoff_location_fo"))
