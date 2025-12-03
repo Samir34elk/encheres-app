@@ -15,6 +15,7 @@ import {
 import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
+import { normalizeImageUrl } from '../utils/normalizeImageUrl'
 
 interface Lot {
   id: number
@@ -104,7 +105,11 @@ export default function LotDetailPage() {
     try {
       setLoading(true)
       const { data } = await api.get(`/lots/${id}`)
-      setLot(data)
+      const normalizedLot: Lot = {
+        ...data,
+        image_url: normalizeImageUrl(data.image_url)
+      }
+      setLot(normalizedLot)
     } catch (error) {
       console.error('Failed to fetch lot details:', error)
       toast.error('Erreur lors du chargement du lot')

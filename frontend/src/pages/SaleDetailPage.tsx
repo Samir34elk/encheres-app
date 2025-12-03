@@ -5,6 +5,7 @@ import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 import { parseSaleMetadata } from '../utils/saleMetadata'
+import { normalizeImageUrl } from '../utils/normalizeImageUrl'
 
 interface Lot {
   id: number
@@ -150,7 +151,11 @@ export default function SaleDetailPage() {
           active_only: true
         }
       })
-      setLots(data.items || [])
+      const items: Lot[] = (data.items || []).map((lot: Lot) => ({
+        ...lot,
+        image_url: normalizeImageUrl(lot.image_url)
+      }))
+      setLots(items)
     } catch (error) {
       console.error('Failed to fetch lots:', error)
       toast.error('Erreur lors du chargement des lots')
@@ -602,7 +607,7 @@ export default function SaleDetailPage() {
                     URL Lot
                   </th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
-                    URL Image
+                    Image
                   </th>
                 </tr>
               </thead>
