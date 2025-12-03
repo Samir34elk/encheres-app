@@ -10,8 +10,8 @@ import logging
 
 from app.core.config import settings
 from app.db.session import get_db, AsyncSessionLocal
-from app.services.batch_scraper import BatchAuctionScraper
-from app.services.sale_discovery import SaleDiscoveryService
+from app.services.graphql_scraper import GraphQLAuctionScraper
+from app.services.graphql_lot_scraper import GraphQLLotScraper
 from app.scheduler.jobs import SchedulerService
 
 router = APIRouter()
@@ -58,7 +58,7 @@ async def trigger_scraping(
     _: None = Depends(verify_cron_secret)
 ):
     """
-    Trigger the sales scraping job manually.
+    Trigger the GraphQL sales scraping job manually.
     This endpoint is called by GitHub Actions or external cron services.
 
     Headers:
@@ -72,25 +72,64 @@ async def trigger_scraping(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=SCRAPER_DISABLED_MESSAGE,
         )
-    logger.info("Scraping job triggered via API endpoint")
+    logger.info("GraphQL scraping job triggered via API endpoint")
 
     async with AsyncSessionLocal() as db:
         try:
-            batch = BatchAuctionScraper(db)
-            summary = await batch.run()
-            logger.info(f"Scraping completed successfully: {summary}")
+            # Étape 1: Scraper les ventes
+            auction_scraper = GraphQLAuctionScraper(db)
+            stats_ventes = await auction_scraper.sync_auctions(
+                filter_status="incoming",
+                max_pages=None
+            )
+            logger.info(f"Ventes synchronisées : {stats_ventes}")
+
+            # Étape 2: Scraper les lots pour les ventes actives
+            lot_scraper = GraphQLLotScraper(db)
+            from shared.models.sale import Sale
+
+            result = await db.execute(
+                select(Sale)
+                .where(Sale.is_active == 1)
+                .order_by(Sale.start_date.desc())
+                .limit(50)
+            )
+            sales = result.scalars().all()
+
+            total_lots = 0
+            for sale in sales:
+                try:
+                    stats_lots = await lot_scraper.sync_auction_lots(
+                        auction_id=str(sale.sale_number),
+                        sale_id=sale.id,
+                        fetch_full_details=False
+                    )
+                    total_lots += stats_lots.get('total_processed', 0)
+                except Exception as e:
+                    logger.error(f"Error scraping sale #{sale.sale_number}: {e}")
+
+            await auction_scraper.close()
+            await lot_scraper.close()
+
+            summary = {
+                "ventes": stats_ventes,
+                "sales_processed": len(sales),
+                "lots_synchronized": total_lots
+            }
+
+            logger.info(f"GraphQL scraping completed successfully: {summary}")
 
             return {
                 "status": "success",
-                "job": "scraping",
+                "job": "graphql-scraping",
                 "summary": summary,
-                "message": "Sales scraping completed successfully"
+                "message": f"GraphQL scraping completed: {len(sales)} ventes, {total_lots} lots"
             }
         except Exception as e:
-            logger.exception(f"Error during scraping job: {e}")
+            logger.exception(f"Error during GraphQL scraping job: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Scraping job failed: {str(e)}"
+                detail=f"GraphQL scraping job failed: {str(e)}"
             )
 
 
@@ -99,7 +138,7 @@ async def trigger_discovery(
     _: None = Depends(verify_cron_secret)
 ):
     """
-    Trigger the sales discovery job manually.
+    Trigger the GraphQL sales discovery job manually.
     This endpoint is called by GitHub Actions or external cron services.
 
     Headers:
@@ -113,31 +152,32 @@ async def trigger_discovery(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=SCRAPER_DISABLED_MESSAGE,
         )
-    logger.info("Discovery job triggered via API endpoint")
+    logger.info("GraphQL discovery job triggered via API endpoint")
 
     async with AsyncSessionLocal() as db:
         try:
-            service = SaleDiscoveryService()
-            sales = await service.fetch_sales()
-            created, updated = await service.sync_with_database(db, sales)
+            scraper = GraphQLAuctionScraper(db)
+            stats = await scraper.sync_auctions(
+                filter_status=None,  # Toutes les ventes
+                max_pages=None
+            )
+            await scraper.close()
 
             result = {
                 "status": "success",
-                "job": "discovery",
-                "total_sales": len(sales),
-                "created": created,
-                "updated": updated,
-                "message": f"Discovery completed: {created} new, {updated} updated"
+                "job": "graphql-discovery",
+                "stats": stats,
+                "message": f"GraphQL discovery completed: {stats}"
             }
 
-            logger.info(f"Discovery completed successfully: {result}")
+            logger.info(f"GraphQL discovery completed successfully: {result}")
             return result
 
         except Exception as e:
-            logger.exception(f"Error during discovery job: {e}")
+            logger.exception(f"Error during GraphQL discovery job: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Discovery job failed: {str(e)}"
+                detail=f"GraphQL discovery job failed: {str(e)}"
             )
 
 
