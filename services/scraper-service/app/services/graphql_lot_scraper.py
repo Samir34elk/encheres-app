@@ -434,12 +434,12 @@ class GraphQLLotScraper:
         # Images
         images = self._parse_images(product.get("media_gallery_entries", []))
 
-        # Prix (state_property_tax)
+        # Prix (state_property_tax) - API retourne déjà en centimes
         price = product.get("state_property_tax")
         if price is not None:
             try:
-                # Convertir en centimes (si en euros)
-                price = int(float(price) * 100)
+                # L'API retourne déjà en centimes, pas besoin de multiplier
+                price = int(float(price))
             except (ValueError, TypeError):
                 price = None
 
@@ -579,19 +579,21 @@ class GraphQLLotScraper:
         short_desc = lot_data.get("short_description") or {}
         description = desc.get("html", "") or short_desc.get("html", "")
 
-        # Prix (price_auction en euros)
+        # Prix (price_auction) - API retourne déjà en centimes
         price = lot_data.get("price_auction")
         if price is not None:
             try:
-                price = int(float(price) * 100)  # Convertir en centimes
+                # L'API retourne déjà en centimes, pas besoin de multiplier
+                price = int(float(price))
             except (ValueError, TypeError):
                 price = None
 
-        # Prix de réserve
+        # Prix de réserve - API retourne déjà en centimes
         price_reserve = lot_data.get("reserve_price")
         if price_reserve is not None:
             try:
-                price_reserve = int(float(price_reserve) * 100)
+                # L'API retourne déjà en centimes, pas besoin de multiplier
+                price_reserve = int(float(price_reserve))
             except (ValueError, TypeError):
                 price_reserve = None
 
