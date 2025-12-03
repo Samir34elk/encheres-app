@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast'
 import axios from 'axios'
 import { CalendarDays, Clock, Package, ExternalLink, MapPin } from 'lucide-react'
 import { parseSaleMetadata } from '../utils/saleMetadata'
+import { normalizeImageUrls } from '../utils/normalizeImageUrl'
 
 interface Sale {
   id: number
@@ -18,6 +19,8 @@ interface Sale {
   start_date?: string | null
   end_date?: string | null
   url?: string | null
+  image_url?: string | null
+  image_urls?: string[] | null
 }
 
 export default function SalesPage() {
@@ -53,7 +56,16 @@ export default function SalesPage() {
       const response = await axios.get(`${import.meta.env.VITE_API_URL}/sales`, {
         params: { page, size: 20 }
       })
-      const normalized = normalizeSales(response.data.items || [])
+      const items: Sale[] = (response.data.items || []).map((sale: any) => {
+        const image_urls = normalizeImageUrls(sale.image_urls ?? sale.image_url)
+        return {
+          ...sale,
+          image_urls,
+          image_url: image_urls[0] ?? sale.image_url ?? null
+        }
+      })
+
+      const normalized = normalizeSales(items)
       setSales(normalized)
       setTotalPages(response.data.pages)
     } catch (error) {
@@ -125,6 +137,20 @@ export default function SalesPage() {
                   className="group flex h-full flex-col justify-between rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-primary-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-500/40"
                 >
                   <div className="space-y-5">
+                    {sale.image_url && (
+                      <div className="overflow-hidden rounded-xl border border-gray-100 shadow-sm dark:border-gray-700">
+                        <img
+                          src={sale.image_url}
+                          alt={sale.title}
+                          className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-3">
                         {metadata.saleType && (

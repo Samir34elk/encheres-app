@@ -12,6 +12,7 @@ export interface Lot {
   depot_location: string | null
   url: string | null
   image_url: string | null
+  image_urls?: string[]
   sale_id: number | null
   sale_end_date: string | null
   view_count: number
@@ -44,6 +45,7 @@ export interface Sale {
   end_date: string | null
   status: string | null
   image_url: string | null
+  image_urls?: string[] | null
   professional_only: boolean
   categories: string[] | null
   first_seen: string

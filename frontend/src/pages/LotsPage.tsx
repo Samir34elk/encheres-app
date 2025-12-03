@@ -5,7 +5,7 @@ import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 import { parseSaleMetadata } from '../utils/saleMetadata'
-import { normalizeImageUrl } from '../utils/normalizeImageUrl'
+import { normalizeImageUrls } from '../utils/normalizeImageUrl'
 
 interface Lot {
   id: number
@@ -17,6 +17,7 @@ interface Lot {
   depot_location: string | null
   url: string | null
   image_url: string | null
+  image_urls: string[]
   sale_id: number | null
   sale_end_date: string | null
 }
@@ -96,11 +97,26 @@ export default function LotsPage() {
             active_only: true
           }
         })
-        const items: Lot[] = (data.items || []).map((lot: Lot) => ({
-          ...lot,
-          image_url: normalizeImageUrl(lot.image_url)
-        }))
-        setLots(items)
+        const items: Lot[] = (data.items || []).map((lot: any) => {
+          const image_urls = normalizeImageUrls(lot.image_urls ?? lot.image_url)
+          return {
+            ...lot,
+            image_urls,
+            image_url: image_urls[0] ?? null
+          }
+        })
+
+        const now = Date.now()
+        const activeItems = items.filter((lot) => {
+          if (lot.status && lot.status.toLowerCase() === 'closed') return false
+          if (lot.sale_end_date) {
+            const end = new Date(lot.sale_end_date).getTime()
+            if (!Number.isNaN(end) && end < now) return false
+          }
+          return true
+        })
+
+        setLots(activeItems)
       } catch (error) {
         console.error('Failed to fetch lots:', error)
         toast.error('Erreur lors du chargement des enchères')

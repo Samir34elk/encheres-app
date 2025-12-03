@@ -15,7 +15,7 @@ import {
 import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
-import { normalizeImageUrl } from '../utils/normalizeImageUrl'
+import { normalizeImageUrls } from '../utils/normalizeImageUrl'
 
 interface Lot {
   id: number
@@ -27,6 +27,7 @@ interface Lot {
   depot_location: string | null
   url: string | null
   image_url: string | null
+  image_urls: string[]
   sale_id: number | null
   sale_end_date: string | null
   view_count: number
@@ -53,6 +54,7 @@ export default function LotDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showCreateAlert, setShowCreateAlert] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   // Alert form
   const [alertType, setAlertType] = useState<'price_drop' | 'price_below' | 'any_change'>('any_change')
@@ -101,15 +103,22 @@ export default function LotDetailPage() {
     }
   }, [alertType])
 
+  useEffect(() => {
+    setSelectedImage(lot?.image_urls?.[0] ?? lot?.image_url ?? null)
+  }, [lot?.image_urls, lot?.image_url])
+
   const fetchLotDetails = async () => {
     try {
       setLoading(true)
       const { data } = await api.get(`/lots/${id}`)
+      const image_urls = normalizeImageUrls(data.image_urls ?? data.image_url)
       const normalizedLot: Lot = {
         ...data,
-        image_url: normalizeImageUrl(data.image_url)
+        image_urls,
+        image_url: image_urls[0] ?? null
       }
       setLot(normalizedLot)
+      setSelectedImage(image_urls[0] ?? null)
     } catch (error) {
       console.error('Failed to fetch lot details:', error)
       toast.error('Erreur lors du chargement du lot')
@@ -231,6 +240,13 @@ export default function LotDetailPage() {
     )
   }
 
+  const galleryImages = lot.image_urls?.length
+    ? lot.image_urls
+    : lot.image_url
+      ? [lot.image_url]
+      : []
+  const mainImage = selectedImage ?? galleryImages[0] ?? null
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -336,17 +352,54 @@ export default function LotDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Image and Details */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Image */}
-          {lot.image_url && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <img
-                src={lot.image_url}
-                alt={lot.title}
-                className="w-full h-auto max-h-96 object-contain"
-                onError={(e) => {
-                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="400"%3E%3Crect fill="%23ddd" width="800" height="400"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-size="24"%3EImage non disponible%3C/text%3E%3C/svg%3E'
-                }}
-              />
+          {/* Images */}
+          {mainImage && (
+            <div className="space-y-3">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <img
+                  src={mainImage}
+                  alt={lot.title}
+                  className="w-full h-auto max-h-96 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="400"%3E%3Crect fill="%23ddd" width="800" height="400"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-size="24"%3EImage non disponible%3C/text%3E%3C/svg%3E'
+                  }}
+                />
+              </div>
+
+              {galleryImages.length > 1 && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                    Autres images
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                    {galleryImages.map((url) => {
+                      const isActive = mainImage === url
+                      return (
+                        <button
+                          key={url}
+                          type="button"
+                          onClick={() => setSelectedImage(url)}
+                          className={`group relative overflow-hidden rounded-lg border ${
+                            isActive
+                              ? 'border-primary-500 ring-2 ring-primary-200 dark:border-primary-300 dark:ring-primary-900/40'
+                              : 'border-gray-200 hover:border-primary-300 dark:border-gray-700 dark:hover:border-gray-500'
+                          }`}
+                        >
+                          <img
+                            src={url}
+                            alt={lot.title}
+                            className="h-20 w-full object-cover transition-transform group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

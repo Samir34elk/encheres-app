@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Heart, Search, Trash2, ExternalLink, TrendingDown, Tag, FileText } from 'lucide-react'
 import api from '../services/api'
 import toast from 'react-hot-toast'
-import { normalizeImageUrl } from '../utils/normalizeImageUrl'
+import { normalizeImageUrls } from '../utils/normalizeImageUrl'
 
 interface Favorite {
   id: number
@@ -12,6 +12,7 @@ interface Favorite {
   lot_title: string
   lot_price: number | null
   lot_image_url: string | null
+  lot_image_urls?: string[]
   lot_url: string | null
   lot_status: string | null
   notes: string | null
@@ -38,10 +39,14 @@ export default function FavoritesPage() {
     try {
       setLoading(true)
       const { data } = await api.get('/favorites')
-      const items: Favorite[] = (data?.items || []).map((item: Favorite) => ({
-        ...item,
-        lot_image_url: normalizeImageUrl(item.lot_image_url)
-      }))
+      const items: Favorite[] = (data?.items || []).map((item: any) => {
+        const image_urls = normalizeImageUrls(item.lot_image_urls ?? item.lot_image_url)
+        return {
+          ...item,
+          lot_image_urls: image_urls,
+          lot_image_url: image_urls[0] ?? null
+        }
+      })
       setFavorites(items)
     } catch (error) {
       console.error('Failed to fetch favorites:', error)

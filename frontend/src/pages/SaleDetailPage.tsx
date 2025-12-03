@@ -5,7 +5,7 @@ import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 import { parseSaleMetadata } from '../utils/saleMetadata'
-import { normalizeImageUrl } from '../utils/normalizeImageUrl'
+import { normalizeImageUrls } from '../utils/normalizeImageUrl'
 
 interface Lot {
   id: number
@@ -17,6 +17,7 @@ interface Lot {
   depot_location: string | null
   url: string | null
   image_url: string | null
+  image_urls: string[]
   sale_id: number | null
   sale_end_date: string | null
 }
@@ -26,6 +27,8 @@ interface Sale {
   sale_number: number
   title: string
   description: string | null
+  image_url?: string | null
+  image_urls?: string[] | null
   status: string
   total_lots: number
   start_date?: string | null
@@ -133,7 +136,12 @@ export default function SaleDetailPage() {
   const fetchSale = async () => {
     try {
       const { data } = await api.get(`/sales/by-number/${saleNumber}`)
-      setSale(data)
+      const image_urls = normalizeImageUrls(data.image_urls ?? data.image_url)
+      setSale({
+        ...data,
+        image_urls,
+        image_url: image_urls[0] ?? data.image_url ?? null
+      })
     } catch (error) {
       console.error('Failed to fetch sale:', error)
       toast.error('Erreur lors du chargement de la vente')
@@ -151,10 +159,14 @@ export default function SaleDetailPage() {
           active_only: true
         }
       })
-      const items: Lot[] = (data.items || []).map((lot: Lot) => ({
-        ...lot,
-        image_url: normalizeImageUrl(lot.image_url)
-      }))
+      const items: Lot[] = (data.items || []).map((lot: any) => {
+        const image_urls = normalizeImageUrls(lot.image_urls ?? lot.image_url)
+        return {
+          ...lot,
+          image_urls,
+          image_url: image_urls[0] ?? null
+        }
+      })
       setLots(items)
     } catch (error) {
       console.error('Failed to fetch lots:', error)
