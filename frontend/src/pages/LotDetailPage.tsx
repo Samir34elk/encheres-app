@@ -16,6 +16,7 @@ import api from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 import { normalizeImageUrls } from '../utils/normalizeImageUrl'
+import { sanitizeHtml } from '../utils/sanitizeHtml'
 
 interface Lot {
   id: number
@@ -246,6 +247,7 @@ export default function LotDetailPage() {
       ? [lot.image_url]
       : []
   const mainImage = selectedImage ?? galleryImages[0] ?? null
+  const descriptionHtml = sanitizeHtml(lot.description)
 
   return (
     <div className="space-y-6">
@@ -409,12 +411,11 @@ export default function LotDetailPage() {
               {lot.title}
             </h2>
 
-            {lot.description && lot.description !== 'N/A' ? (
-              <div className="prose dark:prose-invert max-w-none">
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                  {lot.description}
-                </p>
-              </div>
+            {descriptionHtml ? (
+              <div
+                className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300"
+                dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+              />
             ) : (
               <p className="text-gray-500 dark:text-gray-400 italic">
                 Aucune description disponible

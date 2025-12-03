@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 import { parseSaleMetadata } from '../utils/saleMetadata'
 import { normalizeImageUrls } from '../utils/normalizeImageUrl'
+import { extractTextFromHtml } from '../utils/sanitizeHtml'
 
 interface Lot {
   id: number
@@ -102,7 +103,8 @@ export default function LotsPage() {
           return {
             ...lot,
             image_urls,
-            image_url: image_urls[0] ?? null
+            image_url: image_urls[0] ?? null,
+            description: lot.description ? extractTextFromHtml(lot.description) : lot.description
           }
         })
 
