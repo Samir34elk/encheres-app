@@ -56,10 +56,10 @@ class SchedulerService:
 
         async with AsyncSessionLocal() as db:
             try:
-                # Étape 1: Scraper toutes les ventes actives
+                # Étape 1: Scraper TOUTES les ventes (incoming, ongoing, closed)
                 auction_scraper = GraphQLAuctionScraper(db)
                 stats_ventes = await auction_scraper.sync_auctions(
-                    filter_status="incoming",  # Ventes à venir
+                    filter_status=None,  # TOUTES les ventes
                     max_pages=None  # Toutes les pages
                 )
                 logger.info(f"[SCRAPER] Ventes synchronisées : {stats_ventes}")
@@ -67,13 +67,10 @@ class SchedulerService:
                 # Étape 2: Scraper les lots pour les ventes actives
                 lot_scraper = GraphQLLotScraper(db)
 
-                # Récupérer les ventes actives depuis la BDD
+                # Récupérer TOUTES les ventes depuis la BDD
                 from shared.models.sale import Sale
                 result = await db.execute(
-                    select(Sale)
-                    .where(Sale.status == "active")
-                    .order_by(Sale.start_date.desc())
-                    .limit(50)  # Limiter aux 50 ventes les plus récentes
+                    select(Sale).order_by(Sale.start_date.desc())
                 )
                 sales = result.scalars().all()
 

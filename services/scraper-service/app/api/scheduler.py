@@ -76,10 +76,10 @@ async def trigger_scraping(
 
     async with AsyncSessionLocal() as db:
         try:
-            # Étape 1: Scraper les ventes
+            # Étape 1: Scraper TOUTES les ventes (incoming, ongoing, closed)
             auction_scraper = GraphQLAuctionScraper(db)
             stats_ventes = await auction_scraper.sync_auctions(
-                filter_status="incoming",
+                filter_status=None,  # TOUTES les ventes
                 max_pages=None
             )
             logger.info(f"Ventes synchronisées : {stats_ventes}")
@@ -88,11 +88,9 @@ async def trigger_scraping(
             lot_scraper = GraphQLLotScraper(db)
             from shared.models.sale import Sale
 
+            # Récupérer TOUTES les ventes (pas juste les actives)
             result = await db.execute(
-                select(Sale)
-                .where(Sale.status == "active")
-                .order_by(Sale.start_date.desc())
-                .limit(50)
+                select(Sale).order_by(Sale.start_date.desc())
             )
             sales = result.scalars().all()
 
