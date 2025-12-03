@@ -187,7 +187,7 @@ async def force_scrape_sale(
     _: None = Depends(verify_cron_secret)
 ):
     """
-    Force scrape a specific sale, bypassing the staleness check.
+    Force scrape a specific sale using GraphQL.
     Useful for testing or manual triggers.
 
     Headers:
@@ -201,30 +201,49 @@ async def force_scrape_sale(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=SCRAPER_DISABLED_MESSAGE,
         )
-    from app.services.scraper import AuctionScraper
 
-    logger.info(f"Force scraping sale #{sale_number} via API endpoint")
+    logger.info(f"Force scraping sale #{sale_number} via GraphQL API endpoint")
 
     async with AsyncSessionLocal() as db:
         try:
-            scraper = AuctionScraper(db, sale_number=sale_number)
-            stats = await scraper.run()
+            from shared.models.sale import Sale
+
+            # Trouver la vente par sale_number
+            result = await db.execute(
+                select(Sale).where(Sale.sale_number == sale_number)
+            )
+            sale = result.scalar_one_or_none()
+
+            if not sale:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Sale {sale_number} not found in database"
+                )
+
+            # Scraper les lots de cette vente via GraphQL
+            lot_scraper = GraphQLLotScraper(db)
+            stats = await lot_scraper.sync_auction_lots(
+                auction_id=str(sale_number),
+                sale_id=sale.id,
+                fetch_full_details=True  # Détails complets pour force scrape
+            )
+            await lot_scraper.close()
 
             result = {
                 "status": "success",
                 "sale_number": sale_number,
                 "stats": stats,
-                "message": f"Sale {sale_number} scraped successfully"
+                "message": f"Sale {sale_number} scraped successfully via GraphQL"
             }
 
-            logger.info(f"Force scrape completed: {result}")
+            logger.info(f"GraphQL force scrape completed: {result}")
             return result
 
         except Exception as e:
-            logger.exception(f"Error during force scrape of sale #{sale_number}: {e}")
+            logger.exception(f"Error during GraphQL force scrape of sale #{sale_number}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Scraping sale {sale_number} failed: {str(e)}"
+                detail=f"GraphQL scraping sale {sale_number} failed: {str(e)}"
             )
 
 
@@ -233,7 +252,7 @@ async def force_scrape_all(
     _: None = Depends(verify_cron_secret)
 ):
     """
-    Force scrape ALL sales regardless of staleness check.
+    Force scrape ALL sales using GraphQL.
     Useful after fixing bugs or for bulk updates.
 
     Headers:
@@ -247,34 +266,50 @@ async def force_scrape_all(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=SCRAPER_DISABLED_MESSAGE,
         )
-    from app.models.sale import Sale
-    from app.services.scraper import AuctionScraper
+    from shared.models.sale import Sale
 
-    logger.info("Force scraping ALL sales via API endpoint")
+    logger.info("Force scraping ALL sales via GraphQL API endpoint")
 
     async with AsyncSessionLocal() as db:
         try:
-            # Get all sales
+            # Étape 1: Sync toutes les ventes depuis l'API
+            auction_scraper = GraphQLAuctionScraper(db)
+            stats_ventes = await auction_scraper.sync_auctions(
+                filter_status=None,  # Toutes les ventes
+                max_pages=None
+            )
+            await auction_scraper.close()
+
+            # Étape 2: Get all sales from database
             result = await db.execute(select(Sale))
             sales = result.scalars().all()
 
+            # Étape 3: Scraper les lots pour toutes les ventes
+            lot_scraper = GraphQLLotScraper(db)
+
             summary = {
                 "status": "success",
+                "ventes_synced": stats_ventes,
                 "total_sales": len(sales),
                 "processed": 0,
                 "success": 0,
                 "failed": 0,
+                "total_lots": 0,
                 "details": []
             }
 
             for sale in sales:
                 summary["processed"] += 1
-                logger.info(f"Force scraping sale #{sale.sale_number}")
+                logger.info(f"GraphQL scraping sale #{sale.sale_number}")
 
                 try:
-                    scraper = AuctionScraper(db, sale_number=sale.sale_number)
-                    stats = await scraper.run()
+                    stats = await lot_scraper.sync_auction_lots(
+                        auction_id=str(sale.sale_number),
+                        sale_id=sale.id,
+                        fetch_full_details=False  # Mode rapide
+                    )
                     summary["success"] += 1
+                    summary["total_lots"] += stats.get('total_processed', 0)
                     summary["details"].append({
                         "sale_number": sale.sale_number,
                         "stats": stats
@@ -283,14 +318,16 @@ async def force_scrape_all(
                     logger.exception(f"Error scraping sale #{sale.sale_number}: {e}")
                     summary["failed"] += 1
 
-            logger.info(f"Force scrape all completed: {summary}")
+            await lot_scraper.close()
+
+            logger.info(f"GraphQL force scrape all completed: {summary}")
             return summary
 
         except Exception as e:
-            logger.exception(f"Error during force scrape all: {e}")
+            logger.exception(f"Error during GraphQL force scrape all: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Force scrape all failed: {str(e)}"
+                detail=f"GraphQL force scrape all failed: {str(e)}"
             )
 
 
