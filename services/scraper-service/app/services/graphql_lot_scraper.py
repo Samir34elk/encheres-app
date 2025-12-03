@@ -434,8 +434,8 @@ class GraphQLLotScraper:
         # Images
         images = self._parse_images(product.get("media_gallery_entries", []))
 
-        # Prix (state_property_tax) - API retourne en euros, convertir en centimes
-        price = product.get("state_property_tax")
+        # Prix actuel (last_bid = enchère actuelle, sinon price_auction = mise à prix)
+        price = product.get("last_bid") or product.get("price_auction")
         if price is not None:
             try:
                 # Convertir euros → centimes (x100)
