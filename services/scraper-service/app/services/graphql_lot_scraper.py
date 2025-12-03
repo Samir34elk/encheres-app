@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -356,6 +357,28 @@ class GraphQLLotScraper:
 
         return result
 
+    def _convert_price_to_cents(self, value: Optional[Any]) -> Optional[int]:
+        """
+        Convertit un prix GraphQL (euros string/float) en centimes (int).
+
+        Args:
+            value: Valeur retournée par GraphQL (peut être str, float, int)
+
+        Returns:
+            Montant en centimes ou None si invalide.
+        """
+        if value in (None, ""):
+            return None
+
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+
+        # Utiliser quantize n'est pas nécessaire ici, int() suffit car Decimal
+        # représente déjà exactement 2 décimales pour ces montants.
+        return int(decimal_value * 100)
+
     def _parse_categories(self, categories: List[Dict[str, Any]]) -> List[str]:
         """Parse les catégories en liste de noms"""
         return [cat.get("name") for cat in categories if cat.get("name")]
@@ -434,8 +457,10 @@ class GraphQLLotScraper:
         # Images
         images = self._parse_images(product.get("media_gallery_entries", []))
 
-        # Prix actuel (last_bid = enchère actuelle, sinon price_auction = mise à prix)
-        price = product.get("last_bid") or product.get("price_auction")
+        # Prix actuel (last_bid prioritaire sinon price_auction), en centimes
+        price = self._convert_price_to_cents(product.get("last_bid"))
+        if price is None:
+            price = self._convert_price_to_cents(product.get("price_auction"))
 
         # Localisation
         depot_location = self._parse_dropoff_location(product.get("dropoff_location_fo"))
@@ -573,23 +598,13 @@ class GraphQLLotScraper:
         short_desc = lot_data.get("short_description") or {}
         description = desc.get("html", "") or short_desc.get("html", "")
 
-        # Prix (price_auction) - API retourne en euros, convertir en centimes
-        price = lot_data.get("price_auction")
-        if price is not None:
-            try:
-                # Convertir euros → centimes (x100)
-                price = int(float(price) * 100)
-            except (ValueError, TypeError):
-                price = None
+        # Prix courant: privilégier last_bid sinon price_auction (tous en euros)
+        price = self._convert_price_to_cents(lot_data.get("last_bid"))
+        if price is None:
+            price = self._convert_price_to_cents(lot_data.get("price_auction"))
 
         # Prix de réserve - API retourne en euros, convertir en centimes
-        price_reserve = lot_data.get("reserve_price")
-        if price_reserve is not None:
-            try:
-                # Convertir euros → centimes (x100)
-                price_reserve = int(float(price_reserve) * 100)
-            except (ValueError, TypeError):
-                price_reserve = None
+        price_reserve = self._convert_price_to_cents(lot_data.get("reserve_price"))
 
         # Localisation
         dropoff = lot_data.get("dropoff_location") or {}
