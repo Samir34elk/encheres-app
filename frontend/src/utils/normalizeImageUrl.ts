@@ -1,6 +1,6 @@
 const API_BASE = (import.meta as any).env?.VITE_API_URL?.replace(/\/+$/, '') || ''
-const IMAGE_PROXY_BASE = ((import.meta as any).env?.VITE_IMAGE_PROXY_URL as string | undefined)?.replace(/\/+$/, '')
-  || (API_BASE ? `${API_BASE}/media` : '')
+// Direct static media serving from nginx (no proxy)
+const IMAGE_BASE = API_BASE.replace('/api/v1', '') + '/media'
 const REMOTE_IMAGE_BASE = 'https://encheres-domaine.gouv.fr/admin/media/catalog/product/'
 
 function toStringList(value: unknown): string[] {
@@ -43,20 +43,30 @@ function buildFullUrl(raw: string): string | null {
   if (/^https?:\/\//i.test(cleaned)) {
     try {
       const url = new URL(cleaned)
-      const path = url.pathname.replace(/^\/+/, '')
-      // If the URL already points to the official media host, rewrite through proxy when available
-      if (IMAGE_PROXY_BASE && /encheres-domaine\.(gouv\.fr|com)/i.test(url.hostname)) {
-        return `${IMAGE_PROXY_BASE}/${path}`
+
+      // If from encheres-domaine, try local cache first
+      if (/encheres-domaine\.(gouv\.fr|com)/i.test(url.hostname)) {
+        const path = url.pathname.replace(/^\/+/, '')
+        const cleanPath = path.replace(/^admin\/media\/catalog\/product\//, '')
+        return `${IMAGE_BASE}/${cleanPath}`
       }
+
       return cleaned
     } catch {
       return cleaned
     }
   }
 
-  const normalizedKey = cleaned.replace(/^\/+/, '')
-  const base = IMAGE_PROXY_BASE || REMOTE_IMAGE_BASE
-  return `${base.replace(/\/+$/, '')}/${normalizedKey}`
+  // Relative path - clean and use local cache
+  let cleanPath = cleaned.replace(/^\/+/, '')
+
+  // Remove duplicate base path if present
+  const duplicatePrefix = 'admin/media/catalog/product/'
+  if (cleanPath.startsWith(duplicatePrefix)) {
+    cleanPath = cleanPath.substring(duplicatePrefix.length)
+  }
+
+  return `${IMAGE_BASE}/${cleanPath}`
 }
 
 export function normalizeImageUrls(value: unknown): string[] {

@@ -94,7 +94,7 @@ export default function LotsPage() {
         const { data } = await api.get('/lots', {
           params: {
             page: 1,
-            size: 10000, // Get all lots
+            size: 1000, // Limit to 1000 lots for better performance
             active_only: true
           }
         })
@@ -910,6 +910,7 @@ function TableRow({
               src={lot.image_url}
               alt={lot.title}
               className="w-16 h-16 object-cover rounded cursor-pointer transition-transform"
+              loading="lazy"
               style={{
                 transformOrigin: 'left center'
               }}
@@ -934,6 +935,7 @@ function TableRow({
                   src={lot.image_url}
                   alt={lot.title}
                   className="max-w-4xl max-h-screen rounded-lg shadow-2xl border-4 border-white dark:border-gray-700"
+                  loading="lazy"
                 />
               </div>
             )}
