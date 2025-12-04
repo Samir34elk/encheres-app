@@ -19,7 +19,7 @@ async def proxy_image(path: str):
     """Stream an image from the official domain through the API to avoid hotlink blocking."""
     url = build_remote_url(path)
 
-    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, follow_redirects=True, verify=False) as client:
         try:
             upstream = await client.get(url)
         except httpx.RequestError as exc:
