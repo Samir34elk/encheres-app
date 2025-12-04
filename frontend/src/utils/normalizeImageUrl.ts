@@ -1,7 +1,6 @@
 const API_BASE = (import.meta as any).env?.VITE_API_URL?.replace(/\/+$/, '') || ''
 // Direct static media serving from nginx (no proxy)
 const IMAGE_BASE = API_BASE.replace('/api/v1', '') + '/media'
-const REMOTE_IMAGE_BASE = 'https://encheres-domaine.gouv.fr/admin/media/catalog/product/'
 
 function toStringList(value: unknown): string[] {
   if (!value) return []
