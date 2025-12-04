@@ -1,4 +1,7 @@
-const BASE_IMAGE_URL = 'https://encheres-domaine.gouv.fr/admin/media/catalog/product/'
+const API_BASE = (import.meta as any).env?.VITE_API_URL?.replace(/\/+$/, '') || ''
+const IMAGE_PROXY_BASE = ((import.meta as any).env?.VITE_IMAGE_PROXY_URL as string | undefined)?.replace(/\/+$/, '')
+  || (API_BASE ? `${API_BASE}/media` : '')
+const REMOTE_IMAGE_BASE = 'https://encheres-domaine.gouv.fr/admin/media/catalog/product/'
 
 function toStringList(value: unknown): string[] {
   if (!value) return []
@@ -38,11 +41,22 @@ function buildFullUrl(raw: string): string | null {
   if (!cleaned) return null
 
   if (/^https?:\/\//i.test(cleaned)) {
-    return cleaned
+    try {
+      const url = new URL(cleaned)
+      const path = url.pathname.replace(/^\/+/, '')
+      // If the URL already points to the official media host, rewrite through proxy when available
+      if (IMAGE_PROXY_BASE && /encheres-domaine\.(gouv\.fr|com)/i.test(url.hostname)) {
+        return `${IMAGE_PROXY_BASE}/${path}`
+      }
+      return cleaned
+    } catch {
+      return cleaned
+    }
   }
 
   const normalizedKey = cleaned.replace(/^\/+/, '')
-  return `${BASE_IMAGE_URL}${normalizedKey}`
+  const base = IMAGE_PROXY_BASE || REMOTE_IMAGE_BASE
+  return `${base.replace(/\/+$/, '')}/${normalizedKey}`
 }
 
 export function normalizeImageUrls(value: unknown): string[] {

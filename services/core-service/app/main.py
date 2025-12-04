@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.db.session import init_db
-from app.api import sales, lots, favorites, alerts
+from app.api import sales, lots, favorites, alerts, media
 
 # Configure logging
 logging.basicConfig(
@@ -55,6 +55,7 @@ app.include_router(sales.router, prefix="/api/v1/sales", tags=["sales"])
 app.include_router(lots.router, prefix="/api/v1/lots", tags=["lots"])
 app.include_router(favorites.router, prefix="/api/v1/favorites", tags=["favorites"])
 app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["alerts"])
+app.include_router(media.router, prefix="/api/v1/media", tags=["media"])
 
 
 @app.get("/")
