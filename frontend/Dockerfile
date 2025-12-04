@@ -1,8 +1,6 @@
 # Unified Dockerfile for both development and production
-# Build with: docker build --build-arg MODE=dev -t frontend-dev .
-# Build with: docker build --build-arg MODE=prod -t frontend-prod .
-
-ARG MODE=dev
+# Build dev:  docker build --target development -t frontend-dev .
+# Build prod: docker build --target production -t frontend-prod .
 
 # ===== BUILDER STAGE (for production) =====
 FROM node:20-alpine AS builder
@@ -51,6 +49,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
-
-# ===== FINAL STAGE SELECTION =====
-FROM ${MODE}ion AS final
