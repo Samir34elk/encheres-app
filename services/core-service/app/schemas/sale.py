@@ -34,7 +34,7 @@ class SaleUpdate(BaseModel):
 class SaleResponse(SaleBase):
     """Sale response schema"""
     id: int
-    total_lots: int
+    total_lots: Optional[int] = None
     is_scraped: bool
     last_scraped_at: Optional[datetime] = None
     created_at: datetime
