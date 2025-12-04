@@ -45,7 +45,7 @@ export default function LotsPage() {
   // Display options
   const displayOptions = [50, 100, 500, 1000, 10000]
 
-  const [displayLimit, setDisplayLimit] = useState<number>(10000)
+  const [displayLimit, setDisplayLimit] = useState<number>(100)
   const [displayPage, setDisplayPage] = useState<number>(1)
   const [sortField, setSortField] = useState<SortField>('price')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
