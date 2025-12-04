@@ -1,6 +1,6 @@
 const API_BASE = (import.meta as any).env?.VITE_API_URL?.replace(/\/+$/, '') || ''
-// Direct static media serving from nginx (no proxy)
-const IMAGE_BASE = API_BASE.replace('/api/v1', '') + '/media'
+// Use Python proxy for image serving and caching
+const IMAGE_BASE = API_BASE + '/media'
 
 function toStringList(value: unknown): string[] {
   if (!value) return []
