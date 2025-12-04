@@ -94,7 +94,7 @@ export default function LotsPage() {
         const { data } = await api.get('/lots', {
           params: {
             page: 1,
-            size: 1000, // Limit to 1000 lots for better performance
+            size: 10000,
             active_only: true
           }
         })
