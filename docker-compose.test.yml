@@ -1,0 +1,29 @@
+# Test du scraper contre un FAUX site (aucune requête vers encheres-domaine.gouv.fr).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build db scraper-service fake-site
+#   curl localhost:9000/__stats        # requêtes reçues par le faux site
+#
+# Délais raccourcis pour que le test soit rapide ; la logique est la même qu'en production.
+services:
+  fake-site:
+    image: python:3.11-slim
+    container_name: fake_site
+    command: ["python", "/srv/server.py", "9000"]
+    volumes:
+      - ./services/scraper-service/tests/fake_site:/srv:ro
+    ports:
+      - "9000:9000"
+    networks:
+      - encheres-network
+
+  scraper-service:
+    environment:
+      - AUCTION_GRAPHQL_URL=http://fake-site:9000/gateway/magento/graphql/
+      - HTTP_VERIFY_SSL=false
+      - REQUEST_MIN_DELAY_SECONDS=1
+      - REQUEST_JITTER_SECONDS=0.5
+      - REQUEST_BACKOFF_SECONDS=2
+      - SCRAPER_INTERVAL_MINUTES=2
+      - BLOCK_COOLDOWN_MINUTES=2
+    depends_on:
+      - fake-site

@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
-from app.schemas.lot import LotResponse
+from app.schemas.lot import LotResponse, image_url_to_str
 
 
 class FavoriteBase(BaseModel):
@@ -51,6 +51,8 @@ class FavoriteListItem(BaseModel):
     tags: Optional[List[str]] = None
     created_at: datetime
     price_changed: bool = False
+
+    _image_url_to_str = field_validator("lot_image_url", mode="before")(image_url_to_str)
 
 
 class FavoriteListResponse(BaseModel):

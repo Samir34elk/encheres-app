@@ -43,6 +43,7 @@ class ScraperServiceConfig(BaseServiceConfig):
 
     # Scraper settings
     AUCTION_BASE_URL: str = Field(default="https://encheres-domaine.gouv.fr")
+    AUCTION_GRAPHQL_URL: str = Field(default="https://encheres-domaine.gouv.fr/gateway/magento/graphql/")
     MAX_PAGES: int = Field(default=5)
     MAX_SALES: int = Field(default=20)
     MAX_SALES_FULL_DISCOVERY: int = Field(default=50)

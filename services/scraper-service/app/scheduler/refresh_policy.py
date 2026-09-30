@@ -5,7 +5,7 @@ Avant : TOUTES les ventes de la BDD (y compris clôturées depuis des mois) éta
 re-scrapées toutes les 15 minutes → des centaines de requêtes par passage → IP bloquée.
 
 Maintenant, une vente n'est re-scrapée que si c'est utile :
-- jamais scrapée                    → oui (priorité haute)
+- jamais scrapée                    → oui (priorité selon l'échéance, clôturées en dernier)
 - clôturée / date de fin dépassée   → une seule fois après la fin (prix final), puis plus jamais
 - se termine dans moins de 3h       → toutes les 15 min
 - se termine dans moins de 24h      → toutes les heures
@@ -39,11 +39,13 @@ def decide_lots_refresh(
     last_scraped_at: Optional[datetime],
     now: datetime,
 ) -> RefreshDecision:
-    if last_scraped_at is None:
-        return RefreshDecision(True, 1, "jamais scrapée")
-
     ended = status == "closed" or (end_date is not None and end_date <= now)
-    if ended:
+
+    if last_scraped_at is None:
+        # Historique : utile une fois, mais jamais avant les ventes en cours.
+        if ended:
+            return RefreshDecision(True, 8, "jamais scrapée (clôturée)")
+    elif ended:
         if end_date is None:
             return RefreshDecision(False, 99, "clôturée (sans date de fin)")
         if now < end_date + FINAL_SCRAPE_GRACE:
@@ -64,6 +66,9 @@ def decide_lots_refresh(
     else:
         interval = timedelta(minutes=settings.LOTS_REFRESH_ACTIVE_MINUTES)
         priority, label = 5, "en cours"
+
+    if last_scraped_at is None:
+        return RefreshDecision(True, priority, f"jamais scrapée ({label})")
 
     # Petite tolérance pour ne pas rater un passage à quelques secondes près.
     due = now - last_scraped_at >= interval - timedelta(minutes=1)

@@ -23,6 +23,7 @@ from app.models.sale import Sale
 from app.models.lot import Lot
 from app.models.price_history import PriceHistory
 from app.services.notification_service import NotificationService
+from app.core.config import settings
 from app.services.polite_client import polite_client
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class GraphQLAuctionScraper:
     Remplace AuctionScraper (Playwright) par une approche API.
     """
 
-    BASE_URL = "https://encheres-domaine.gouv.fr/gateway/magento/graphql/"
+    BASE_URL = settings.AUCTION_GRAPHQL_URL
     IMAGE_PREFIX = "https://encheres-domaine.gouv.fr/admin/media/auctions/upload/"
 
     # Requête GraphQL pour lister les ventes

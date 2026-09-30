@@ -152,7 +152,6 @@ services:
     volumes:
       - ./services/scraper-service:/app
       - ./services/shared:/app/shared
-      - ./scripts:/app/scripts
       - ./services/core-service:/core-services:ro
     depends_on:
       db:

@@ -1,6 +1,16 @@
-from pydantic import BaseModel
+import json
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+
+def image_url_to_str(value: Any) -> Any:
+    """La colonne image_url peut être du texte ou du JSONB (liste d'URLs) selon
+    le service qui a créé la table : on renvoie toujours du texte, que le
+    frontend sait décoder (voir frontend/src/utils/normalizeImageUrl.ts)."""
+    if isinstance(value, (list, dict)):
+        return json.dumps(value)
+    return value
 
 
 class LotBase(BaseModel):
@@ -17,6 +27,8 @@ class LotBase(BaseModel):
     caracteristiques: Optional[Dict[str, Any]] = None
     professionnel: bool = False
     price_reserve: Optional[int] = None
+
+    _image_url_to_str = field_validator("image_url", mode="before")(image_url_to_str)
 
 
 class LotCreate(LotBase):

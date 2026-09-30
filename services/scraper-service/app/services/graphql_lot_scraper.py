@@ -18,6 +18,7 @@ from app.models.lot import Lot
 from app.models.sale import Sale
 from app.models.price_history import PriceHistory
 from app.services.notification_service import NotificationService
+from app.core.config import settings
 from app.services.polite_client import ScraperPausedError, polite_client
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class GraphQLLotScraper:
     Utilise l'API GraphQL getProductPageMain pour chaque lot.
     """
 
-    BASE_URL = "https://encheres-domaine.gouv.fr/gateway/magento/graphql/"
+    BASE_URL = settings.AUCTION_GRAPHQL_URL
     IMAGE_PREFIX = "https://encheres-domaine.gouv.fr/admin/media/products/"
 
     # Requête GraphQL pour lister les lots d'une vente (NOUVELLE!)
@@ -107,7 +108,7 @@ class GraphQLLotScraper:
 
     # Template d'URL pour getProductPageMain (optimisé)
     URL_TEMPLATE = (
-        "https://encheres-domaine.gouv.fr/gateway/magento/graphql/"
+        settings.AUCTION_GRAPHQL_URL +
         "?query=query+getProductPageMain%28%24urlKey%3AString%21%29%7B"
         "products%28filter%3A%7Burl_key%3A%7Beq%3A%24urlKey%7D%7D%29%7B"
         "items%7Buid+__typename+auction_type+categories%7Buid+name+url_key+url_path+__typename%7D"

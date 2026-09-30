@@ -13,6 +13,14 @@ def decide(status, end_in=None, scraped_ago=None):
 
 def test_never_scraped_is_due():
     assert decide("active", timedelta(days=3)).due
+    assert decide("closed", -timedelta(days=30)).due
+
+
+def test_never_scraped_closed_sales_come_after_open_ones():
+    closed = decide("closed", -timedelta(days=30))
+    upcoming = decide("upcoming", timedelta(days=30))
+    ending_soon = decide("active", timedelta(hours=1))
+    assert ending_soon.priority < upcoming.priority < closed.priority
 
 
 def test_closed_and_finalized_is_never_rescraped():

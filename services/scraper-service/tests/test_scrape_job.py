@@ -61,9 +61,17 @@ async def test_only_due_sales_are_scraped_most_urgent_first():
     summary, scraped, auction_scraper = await run_job(sales)
 
     assert summary["status"] == "success"
-    assert scraped == ["4", "5", "3"]
+    assert scraped == ["4", "3", "5"]
     auction_scraper.sync_auctions.assert_awaited_once_with(incremental=True)
     assert sales[3].last_scraped_at > datetime.utcnow() - timedelta(minutes=1)
+
+
+async def test_first_start_scrapes_open_sales_before_history():
+    sales = [sale(n, "closed", -timedelta(days=n), None) for n in range(1, 30)]
+    sales.append(sale(100, "active", timedelta(minutes=50), None))
+    sales.append(sale(101, "upcoming", timedelta(days=20), None))
+    _, scraped, _ = await run_job(sales, max_sales=5)
+    assert scraped[:2] == ["100", "101"]
 
 
 async def test_respects_max_sales_per_run():

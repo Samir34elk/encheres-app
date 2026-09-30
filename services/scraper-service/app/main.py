@@ -16,6 +16,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+# httpx logue chaque URL GraphQL complète (plusieurs Ko) : trop verbeux.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Create scheduler instance
 scheduler = SchedulerService()
