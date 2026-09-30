@@ -119,3 +119,23 @@ async def test_success_resets_block_counter():
     fake.now += 7200
     await client.get_json("https://x/graphql")
     assert client.consecutive_blocks == 0
+
+
+async def test_html_challenge_page_pauses_scraping():
+    fake = FakeTime()
+    calls = []
+    challenge = "<html><body><script>window.location.href='/redirect_X/'</script>" \
+                "<noscript>This website requires JS enabled and cookies</noscript></body></html>"
+
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(200, text=challenge, headers={"content-type": "text/html"})
+
+    client = make_client(handler, fake)
+
+    with pytest.raises(ScraperPausedError):
+        await client.get_json("https://x/graphql")
+    with pytest.raises(ScraperPausedError):
+        await client.get_json("https://x/graphql")
+    assert len(calls) == 1
+    assert "anti-robot" in client.last_error

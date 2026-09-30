@@ -7,6 +7,7 @@ compte toutes les requêtes reçues et peut simuler un blocage.
     GET  /__stats              → nombre de requêtes par opération, intervalle minimum observé
     POST /__mode?value=403     → le site répond 403 à tout (IP bloquée)
     POST /__mode?value=429     → le site répond 429 à tout (trop de requêtes)
+    POST /__mode?value=challenge → page HTML anti-robot (JS + cookies requis)
     POST /__mode?value=ok      → retour à la normale
     POST /__reset              → remet les compteurs à zéro
 
@@ -145,6 +146,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if mode in ("403", "429"):
             self._json(int(mode), {"message": "blocked"})
+            return
+        if mode == "challenge":
+            html = (b"<html><body><script>window.location.href='/redirect_X/'</script>"
+                    b"<noscript>This website requires JS enabled and cookies</noscript></body></html>")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
             return
 
         if op == "getAuctions":

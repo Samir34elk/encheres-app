@@ -173,9 +173,19 @@ class PoliteClient:
                     logger.warning("[POLITE] Erreur réseau (tentative %d) : %s", attempt + 1, exc)
                 else:
                     if response.status_code < 400:
+                        try:
+                            data = response.json()
+                        except ValueError:
+                            # Page HTML (ex. "This website requires JS enabled and cookies") :
+                            # le site filtre les clients automatisés. On s'arrête, on ne
+                            # tente pas de contourner la protection.
+                            self._trip_breaker("protection anti-robot (réponse HTML au lieu de JSON)")
+                            raise ScraperPausedError(
+                                "Le site renvoie une page anti-robot au lieu des données"
+                            )
                         self.consecutive_blocks = 0
                         self.last_error = None
-                        return response.json()
+                        return data
 
                     self.last_error = f"HTTP {response.status_code}"
                     if response.status_code == 403:
