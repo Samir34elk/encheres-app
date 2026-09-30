@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.db.session import init_db
 from app.scheduler.jobs import SchedulerService
 from app.api import scheduler as scraper_router
+from app.services.polite_client import polite_client
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down Scraper Service...")
     scheduler.shutdown()
+    await polite_client.aclose()
 
 
 # Create FastAPI app
@@ -84,7 +86,8 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "scheduler_running": scheduler.scheduler.running if scheduler else False
+        "scheduler_running": scheduler.scheduler.running if scheduler else False,
+        "scraper_paused": polite_client.is_paused(),
     }
 
 

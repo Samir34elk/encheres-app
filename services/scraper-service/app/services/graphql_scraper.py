@@ -16,7 +16,6 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -24,6 +23,7 @@ from app.models.sale import Sale
 from app.models.lot import Lot
 from app.models.price_history import PriceHistory
 from app.services.notification_service import NotificationService
+from app.services.polite_client import polite_client
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +98,9 @@ class GraphQLAuctionScraper:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.notification_service = NotificationService(db)
-        self.client = httpx.AsyncClient(verify=False, timeout=30.0)
 
     async def close(self):
-        """Ferme le client HTTP"""
-        await self.client.aclose()
+        """Conservé pour compatibilité : le client HTTP est partagé (polite_client)."""
 
     async def fetch_auctions(
         self,
@@ -143,36 +141,25 @@ class GraphQLAuctionScraper:
             "variables": json.dumps(variables)
         }
 
-        try:
-            logger.info(f"Fetching auctions page {page} (size: {page_size})")
-            response = await self.client.get(self.BASE_URL, params=params)
-            response.raise_for_status()
+        logger.info(f"Fetching auctions page {page} (size: {page_size})")
+        data = await polite_client.get_json(self.BASE_URL, params=params)
 
-            data = response.json()
+        if "errors" in data:
+            logger.error(f"GraphQL errors: {data['errors']}")
+            raise Exception(f"GraphQL errors: {data['errors']}")
 
-            if "errors" in data:
-                logger.error(f"GraphQL errors: {data['errors']}")
-                raise Exception(f"GraphQL errors: {data['errors']}")
-
-            auctions_data = data.get("data", {}).get("auctionsList", {})
-            logger.info(
-                f"Fetched {len(auctions_data.get('items', []))} auctions "
-                f"(total: {auctions_data.get('total_count', 0)})"
-            )
-
-            return auctions_data
-
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error fetching auctions: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error fetching auctions: {e}")
-            raise
+        auctions_data = (data.get("data") or {}).get("auctionsList") or {}
+        logger.info(
+            f"Fetched {len(auctions_data.get('items', []))} auctions "
+            f"(total: {auctions_data.get('total_count', 0)})"
+        )
+        return auctions_data
 
     async def fetch_all_auctions(
         self,
         filter_status: Optional[List[str]] = None,
-        max_pages: Optional[int] = None
+        max_pages: Optional[int] = None,
+        incremental: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Récupère toutes les ventes (pagination automatique)
@@ -180,18 +167,23 @@ class GraphQLAuctionScraper:
         Args:
             filter_status: Filtrer par statut
             max_pages: Nombre maximum de pages (None = toutes)
+            incremental: Trie par date de début décroissante et s'arrête dès qu'une
+                page ne contient que des ventes clôturées déjà connues en BDD
+                (évite de re-télécharger tout l'historique à chaque passage).
 
         Returns:
             Liste de toutes les ventes
         """
         all_auctions = []
         page = 1
+        known_closed = await self._known_closed_sale_numbers() if incremental else set()
 
         while True:
             data = await self.fetch_auctions(
                 page=page,
                 page_size=100,
-                filter_status=filter_status
+                filter_status=filter_status,
+                sort_order="DESC" if incremental else "ASC"
             )
 
             items = data.get("items", [])
@@ -199,6 +191,14 @@ class GraphQLAuctionScraper:
                 break
 
             all_auctions.extend(items)
+
+            if incremental and all(
+                self._map_status(item.get("status_text")) == "closed"
+                and self._to_int(item.get("dnid_auction_id")) in known_closed
+                for item in items
+            ):
+                logger.info(f"Incremental sync: page {page} only has known closed sales, stopping")
+                break
 
             # Vérifier s'il y a d'autres pages
             page_info = data.get("page_info", {})
@@ -211,6 +211,19 @@ class GraphQLAuctionScraper:
 
         logger.info(f"Fetched total of {len(all_auctions)} auctions")
         return all_auctions
+
+    async def _known_closed_sale_numbers(self) -> set:
+        result = await self.db.execute(
+            select(Sale.sale_number).where(Sale.status == "closed")
+        )
+        return set(result.scalars().all())
+
+    @staticmethod
+    def _to_int(value: Any) -> Optional[int]:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _parse_auction_data(self, auction_raw: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -238,7 +251,7 @@ class GraphQLAuctionScraper:
             image_url = self.IMAGE_PREFIX + image_path
 
         return {
-            "sale_number": auction_raw.get("dnid_auction_id"),
+            "sale_number": self._to_int(auction_raw.get("dnid_auction_id")),
             "title": auction_raw.get("name"),
             "description": auction_raw.get("description"),
             "organiser": organiser,
@@ -250,8 +263,8 @@ class GraphQLAuctionScraper:
             "total_lots": auction_raw.get("auction_number_of_lots", 0),
             "image_url": image_url,
             "url": f"https://encheres-domaine.gouv.fr/vente/{auction_raw.get('dnid_auction_id')}",
-            "is_scraped": True,
-            "last_scraped_at": datetime.utcnow()
+            # is_scraped / last_scraped_at concernent le scraping des LOTS :
+            # ils sont mis à jour par le job de scraping, pas ici.
         }
 
     def _parse_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
@@ -319,7 +332,7 @@ class GraphQLAuctionScraper:
             logger.info(f"Updated sale #{sale_number}: {parsed['title']}")
         else:
             # Création
-            sale = Sale(**parsed)
+            sale = Sale(**parsed, is_scraped=False, last_scraped_at=None)
             self.db.add(sale)
             logger.info(f"Created sale #{sale_number}: {parsed['title']}")
 
@@ -329,7 +342,8 @@ class GraphQLAuctionScraper:
     async def sync_auctions(
         self,
         filter_status: Optional[List[str]] = None,
-        max_pages: Optional[int] = None
+        max_pages: Optional[int] = None,
+        incremental: bool = False
     ) -> Dict[str, int]:
         """
         Synchronise toutes les ventes de l'API vers la BDD
@@ -346,7 +360,8 @@ class GraphQLAuctionScraper:
         # Récupérer toutes les ventes
         auctions = await self.fetch_all_auctions(
             filter_status=filter_status,
-            max_pages=max_pages
+            max_pages=max_pages,
+            incremental=incremental
         )
 
         stats = {"created": 0, "updated": 0, "total": len(auctions), "errors": 0}
@@ -355,9 +370,9 @@ class GraphQLAuctionScraper:
         for auction_raw in auctions:
             try:
                 # Vérifier si existe déjà
-                sale_number = auction_raw.get("dnid_auction_id")
+                sale_number = self._to_int(auction_raw.get("dnid_auction_id"))
                 result = await self.db.execute(
-                    select(Sale).where(Sale.sale_number == sale_number)
+                    select(Sale.id).where(Sale.sale_number == sale_number)
                 )
                 exists = result.scalar_one_or_none() is not None
 

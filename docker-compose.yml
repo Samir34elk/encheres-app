@@ -140,7 +140,10 @@ services:
       - DEBUG=false
       - ENABLE_SCHEDULER=true
       - SCRAPER_INTERVAL_MINUTES=15
-      - ENABLE_PRICE_UPDATES=true
+      # Anti-blocage (valeurs par défaut dans scraper-service/app/core/config.py)
+      - REQUEST_MIN_DELAY_SECONDS=${REQUEST_MIN_DELAY_SECONDS:-4}
+      - MAX_REQUESTS_PER_DAY=${MAX_REQUESTS_PER_DAY:-1500}
+      - MAX_SALES_PER_RUN=${MAX_SALES_PER_RUN:-15}
       - AUCTION_BASE_URL=https://encheres-domaine.gouv.fr
       - CORE_SERVICE_URL=http://core-service:8002
       - CRON_SECRET=${CRON_SECRET:-dev-cron-secret}

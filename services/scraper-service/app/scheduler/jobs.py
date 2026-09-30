@@ -1,244 +1,206 @@
 """
-Scheduler for automated scraping jobs.
-REPLACES: GitHub Actions workflows (.github/workflows/scheduled-jobs.yml)
+Scheduler des jobs de scraping.
 
-This internal scheduler runs the same jobs that were previously executed by GitHub Actions:
-1. Scrape sales every 15 minutes (replaces prepare-sales + scrape-sales jobs)
-2. Discover sales daily at 3am (replaces discover-sales job)
-3. Update favorite prices every minute (replaces update-favorite-prices job)
+Stratégie anti-blocage (voir aussi app/services/polite_client.py) :
+1. Liste des ventes : rafraîchie au plus toutes les SALES_LIST_REFRESH_MINUTES,
+   en mode incrémental (on s'arrête dès qu'on retombe sur des ventes clôturées connues).
+2. Lots : seules les ventes qui en ont besoin sont re-scrapées (voir refresh_policy.py),
+   les plus urgentes d'abord, au plus MAX_SALES_PER_RUN par passage.
+3. Découverte complète (tout l'historique) : une fois par jour, la nuit.
+4. Toutes les requêtes passent par un client unique, throttlé, avec disjoncteur.
 """
 
+import asyncio
 import logging
-import sys
-import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
-
-# Add scripts directory (legacy GitHub Actions) to sys.path
-SCRIPTS_PATH = os.getenv("SCRIPTS_PATH", "/app/scripts")
-if os.path.isdir(SCRIPTS_PATH):
-    sys.path.insert(0, SCRIPTS_PATH)
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
+from app.models.sale import Sale
+from app.scheduler.refresh_policy import decide_lots_refresh
 from app.services.graphql_scraper import GraphQLAuctionScraper
 from app.services.graphql_lot_scraper import GraphQLLotScraper
-from sqlalchemy import select
+from app.services.polite_client import ScraperPausedError, polite_client
 
 logger = logging.getLogger(__name__)
 
 
 class SchedulerService:
-    """
-    Internal scheduler service that replaces GitHub Actions.
-
-    GitHub Actions workflows replaced:
-    - scheduled-jobs.yml::prepare-sales (every 15 min)
-    - scheduled-jobs.yml::scrape-sales (every 15 min)
-    - scheduled-jobs.yml::discover-sales (daily at 3am)
-    - scheduled-jobs.yml::update-favorite-prices (every minute)
-    """
-
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
+        # Un seul job de scraping à la fois (planifié ou déclenché via l'API).
+        self._run_lock = asyncio.Lock()
+        self._last_sales_list_refresh: Optional[datetime] = None
+        self.last_run: Dict[str, Any] = {}
 
-    async def scrape_sales_job(self):
+    @property
+    def is_running(self) -> bool:
+        return self._run_lock.locked()
+
+    async def scrape_sales_job(self, force_all_open: bool = False) -> Dict[str, Any]:
         """
-        Scraping périodique des ventes et lots via GraphQL.
+        Scraping périodique : rafraîchit la liste des ventes si nécessaire,
+        puis les lots des ventes qui en ont besoin.
 
-        REPLACES: GitHub Actions jobs 'prepare-sales' + 'scrape-sales'
-        - Was: Playwright HTML scraping (slow, fragile)
-        - Now: GraphQL API scraping (30x faster, stable)
+        force_all_open: ignore les intervalles et scrape toutes les ventes non finalisées
+        (toujours sans re-scraper les ventes clôturées déjà finalisées).
         """
-        logger.info("[SCRAPER] Exécution du job : scraping GraphQL des ventes et lots")
-        logger.info("[SCRAPER] (Replaces: GitHub Actions prepare-sales + scrape-sales)")
+        if self._run_lock.locked():
+            logger.info("[SCRAPER] Un scraping est déjà en cours, passage ignoré")
+            return {"status": "skipped", "reason": "already_running"}
 
-        async with AsyncSessionLocal() as db:
+        async with self._run_lock:
+            if polite_client.is_paused():
+                logger.warning("[SCRAPER] Scraping en pause : %s", polite_client.status())
+                return {"status": "paused", "client": polite_client.status()}
+
+            summary: Dict[str, Any] = {
+                "status": "success",
+                "started_at": datetime.utcnow().isoformat(),
+                "sales_list": None,
+                "sales_scraped": [],
+                "lots_total": 0,
+            }
             try:
-                # Étape 1: Scraper TOUTES les ventes (incoming, ongoing, closed)
-                auction_scraper = GraphQLAuctionScraper(db)
-                stats_ventes = await auction_scraper.sync_auctions(
-                    filter_status=None,  # TOUTES les ventes
-                    max_pages=None  # Toutes les pages
-                )
-                logger.info(f"[SCRAPER] Ventes synchronisées : {stats_ventes}")
+                async with AsyncSessionLocal() as db:
+                    now = datetime.utcnow()
+                    if force_all_open or self._sales_list_is_stale(now):
+                        summary["sales_list"] = await GraphQLAuctionScraper(db).sync_auctions(
+                            incremental=True
+                        )
+                        self._last_sales_list_refresh = now
 
-                # Étape 2: Scraper les lots pour les ventes actives
-                lot_scraper = GraphQLLotScraper(db)
-
-                # Récupérer TOUTES les ventes depuis la BDD
-                from shared.models.sale import Sale
-                result = await db.execute(
-                    select(Sale).order_by(Sale.start_date.desc())
-                )
-                sales = result.scalars().all()
-
-                total_lots = 0
-                for sale in sales:
-                    try:
-                        stats_lots = await lot_scraper.sync_auction_lots(
+                    for sale, reason in await self._select_due_sales(db, force_all_open):
+                        stats = await GraphQLLotScraper(db).sync_auction_lots(
                             auction_id=str(sale.sale_number),
                             sale_id=sale.id,
-                            fetch_full_details=False  # Rapide: juste les infos de base
+                            fetch_full_details=False,
                         )
-                        total_lots += stats_lots.get('total_processed', 0)
-                        logger.info(f"[SCRAPER] Vente #{sale.sale_number}: {stats_lots}")
-                    except Exception as e:
-                        logger.error(f"[SCRAPER] Erreur vente #{sale.sale_number}: {e}")
-
-                # Fermer les sessions aiohttp
-                await auction_scraper.close()
-                await lot_scraper.close()
-
-                logger.info(
-                    f"[SCRAPER] Scraping terminé : {len(sales)} ventes, "
-                    f"{total_lots} lots synchronisés"
-                )
-
+                        sale.is_scraped = True
+                        sale.last_scraped_at = datetime.utcnow()
+                        await db.commit()
+                        summary["lots_total"] += stats.get("total", 0)
+                        summary["sales_scraped"].append(
+                            {"sale_number": sale.sale_number, "reason": reason, "lots": stats.get("total", 0)}
+                        )
+            except ScraperPausedError as exc:
+                logger.error("[SCRAPER] Arrêt du passage : %s", exc)
+                summary["status"] = "paused"
+                summary["error"] = str(exc)
             except Exception as exc:
-                logger.exception(f"[SCRAPER] Erreur pendant le scraping automatique : {exc}")
+                logger.exception("[SCRAPER] Erreur pendant le scraping : %s", exc)
+                summary["status"] = "error"
+                summary["error"] = str(exc)
 
-    async def discover_sales_job(self):
-        """
-        Découverte quotidienne des ventes disponibles via GraphQL.
+            summary["client"] = polite_client.status()
+            self.last_run["scrape_sales"] = summary
+            logger.info(
+                "[SCRAPER] Terminé (%s) : %d ventes, %d lots, %d requêtes aujourd'hui",
+                summary["status"], len(summary["sales_scraped"]), summary["lots_total"],
+                polite_client.requests_today,
+            )
+            return summary
 
-        REPLACES: GitHub Actions job 'discover-sales'
-        - Was: HTML scraping for sale discovery
-        - Now: GraphQL API (all statuses: incoming, ongoing, closed)
-        """
-        logger.info("[DISCOVERY] Exécution du job : découverte GraphQL des ventes")
-        logger.info("[DISCOVERY] (Replaces: GitHub Actions discover-sales)")
+    def _sales_list_is_stale(self, now: datetime) -> bool:
+        return self._last_sales_list_refresh is None or (
+            now - self._last_sales_list_refresh
+            >= timedelta(minutes=settings.SALES_LIST_REFRESH_MINUTES)
+        )
 
-        async with AsyncSessionLocal() as db:
+    async def _select_due_sales(self, db, force_all_open: bool):
+        now = datetime.utcnow()
+        # Les ventes clôturées finalisées sont écartées par la politique ;
+        # on ne charge que les colonnes utiles au tri.
+        result = await db.execute(select(Sale))
+        candidates = []
+        for sale in result.scalars().all():
+            decision = decide_lots_refresh(sale.status, sale.end_date, sale.last_scraped_at, now)
+            if decision.due or (force_all_open and decision.priority < 99):
+                candidates.append((decision.priority, sale.end_date or datetime.max, sale, decision.reason))
+
+        candidates.sort(key=lambda c: (c[0], c[1]))
+        limit = None if force_all_open else settings.MAX_SALES_PER_RUN
+        selected = candidates[:limit]
+        if len(candidates) > len(selected):
+            logger.info(
+                "[SCRAPER] %d ventes à rafraîchir, %d traitées ce passage (MAX_SALES_PER_RUN)",
+                len(candidates), len(selected),
+            )
+        return [(sale, reason) for _, _, sale, reason in selected]
+
+    async def discover_sales_job(self) -> Dict[str, Any]:
+        """Découverte complète de la liste des ventes (tout l'historique), une fois par jour."""
+        if self._run_lock.locked():
+            return {"status": "skipped", "reason": "already_running"}
+
+        async with self._run_lock:
+            if polite_client.is_paused():
+                return {"status": "paused", "client": polite_client.status()}
             try:
-                scraper = GraphQLAuctionScraper(db)
-
-                # Synchroniser TOUTES les ventes (incoming, ongoing, closed)
-                stats = await scraper.sync_auctions(
-                    filter_status=None,  # Toutes les ventes
-                    max_pages=None  # Toutes les pages
-                )
-
-                await scraper.close()
-
-                logger.info(
-                    f"[DISCOVERY] Découverte terminée : {stats}"
-                )
+                async with AsyncSessionLocal() as db:
+                    stats = await GraphQLAuctionScraper(db).sync_auctions()
+                self._last_sales_list_refresh = datetime.utcnow()
+                summary = {"status": "success", "stats": stats}
+            except ScraperPausedError as exc:
+                summary = {"status": "paused", "error": str(exc)}
             except Exception as exc:
-                logger.exception(f"[DISCOVERY] Erreur pendant la découverte automatique des ventes : {exc}")
+                logger.exception("[DISCOVERY] Erreur : %s", exc)
+                summary = {"status": "error", "error": str(exc)}
 
-    async def update_favorite_prices_job(self):
-        """
-        Mise à jour des prix des lots favoris.
-
-        REPLACES: GitHub Actions job 'update-favorite-prices'
-        - Was: Python script update_favorite_prices.py triggered every minute
-        - Now: Internal APScheduler job (every minute)
-
-        NOTE: Legacy script not implemented yet. This job is disabled until
-        the favorite prices update logic is migrated to GraphQL.
-        """
-        logger.info("[PRICES] Exécution du job : mise à jour des prix favoris")
-        logger.info("[PRICES] (Replaces: GitHub Actions update-favorite-prices)")
-
-        try:
-            # Try to import the legacy script if it exists
-            try:
-                from update_favorite_prices import main as update_prices_main
-                await update_prices_main()
-            except ModuleNotFoundError:
-                logger.warning(
-                    "[PRICES] Module 'update_favorite_prices' not found. "
-                    "This legacy feature needs to be migrated to GraphQL. "
-                    "Set ENABLE_PRICE_UPDATES=False to disable this job."
-                )
-        except Exception as exc:
-            logger.exception(f"[PRICES] Erreur pendant la mise à jour des prix : {exc}")
+            summary["client"] = polite_client.status()
+            self.last_run["discover_sales"] = summary
+            logger.info("[DISCOVERY] %s", summary)
+            return summary
 
     def start(self):
-        """Démarre le scheduler et enregistre les tâches."""
         if not settings.ENABLE_SCHEDULER:
-            logger.info("⚠️ Internal scheduler disabled via configuration.")
+            logger.info("Internal scheduler disabled via configuration.")
             return
 
-        logger.info("="*60)
-        logger.info("🚀 Starting Internal Scheduler")
-        logger.info("   REPLACES: GitHub Actions (.github/workflows/scheduled-jobs.yml)")
-        logger.info("="*60)
-
-        # Job 1: Scrape sales every 15 minutes
-        # REPLACES: GitHub Actions cron '*/15 * * * *' (prepare-sales + scrape-sales)
         self.scheduler.add_job(
             self.scrape_sales_job,
-            trigger=IntervalTrigger(minutes=settings.SCRAPER_INTERVAL_MINUTES),
+            trigger=IntervalTrigger(minutes=settings.SCRAPER_INTERVAL_MINUTES, jitter=120),
             id="scrape_sales",
-            name="[SCRAPER] Scrape sales (Replaces GHA prepare-sales + scrape-sales)",
+            name="Scraping des ventes/lots à rafraîchir",
             replace_existing=True,
+            coalesce=True,
+            max_instances=1,
         )
-        logger.info(f"✓ Job 1: Scrape sales every {settings.SCRAPER_INTERVAL_MINUTES} minutes")
-        logger.info(f"         (Replaces: GitHub Actions cron '*/15 * * * *')")
-
-        # Job 2: Discover sales daily at 3am
-        # REPLACES: GitHub Actions cron '0 3 * * *' (discover-sales)
         self.scheduler.add_job(
             self.discover_sales_job,
-            trigger=CronTrigger(hour=3, minute=0),
+            trigger=CronTrigger(hour=3, minute=17, jitter=900),
             id="discover_sales",
-            name="[DISCOVERY] Discover sales daily (Replaces GHA discover-sales)",
+            name="Découverte complète des ventes (quotidienne)",
             replace_existing=True,
+            coalesce=True,
+            max_instances=1,
         )
-        logger.info(f"✓ Job 2: Discover sales daily at 3:00 AM")
-        logger.info(f"         (Replaces: GitHub Actions cron '0 3 * * *')")
-
-        # Job 3: Update favorite prices every minute
-        # REPLACES: GitHub Actions cron '* * * * *' (update-favorite-prices)
-        if settings.ENABLE_PRICE_UPDATES:
-            self.scheduler.add_job(
-                self.update_favorite_prices_job,
-                trigger=IntervalTrigger(minutes=1),
-                id="update_favorite_prices",
-                name="[PRICES] Update favorite prices (Replaces GHA update-favorite-prices)",
-                replace_existing=True,
-            )
-            logger.info(f"✓ Job 3: Update favorite prices every minute")
-            logger.info(f"         (Replaces: GitHub Actions cron '* * * * *')")
-        else:
-            logger.info(f"⊘ Job 3: Update favorite prices DISABLED")
-
         self.scheduler.start()
-        logger.info("="*60)
-        logger.info("✅ Scheduler started successfully!")
-        logger.info("   GitHub Actions workflows are now REPLACED by internal scheduler")
-        logger.info("="*60)
+        logger.info(
+            "Scheduler démarré : scraping toutes les %d min, découverte quotidienne à 3h",
+            settings.SCRAPER_INTERVAL_MINUTES,
+        )
 
     def shutdown(self):
-        """Arrête proprement le scheduler."""
         if self.scheduler.running:
             self.scheduler.shutdown()
             logger.info("Scheduler arrêté")
 
     def get_jobs(self):
-        """Get all scheduled jobs"""
         return self.scheduler.get_jobs()
 
     def pause_job(self, job_id: str):
-        """Pause a specific job"""
         job = self.scheduler.get_job(job_id)
         if job:
             job.pause()
-            logger.info(f"Job {job_id} paused")
 
     def resume_job(self, job_id: str):
-        """Resume a paused job"""
         job = self.scheduler.get_job(job_id)
         if job:
             job.resume()
-            logger.info(f"Job {job_id} resumed")
-
-    def trigger_job(self, job_id: str):
-        """Manually trigger a job"""
-        job = self.scheduler.get_job(job_id)
-        if job:
-            job.modify(next_run_time=None)
-            logger.info(f"Job {job_id} triggered manually")

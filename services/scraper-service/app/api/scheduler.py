@@ -1,6 +1,6 @@
 """
-Scheduler endpoints for triggering background jobs externally.
-Used by GitHub Actions or external cron services.
+Endpoints de pilotage du scraper (déclenchement manuel, état, diagnostic).
+Tout passe par le client HTTP throttlé : aucun endpoint ne contourne la protection anti-blocage.
 """
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -10,9 +10,9 @@ import logging
 
 from app.core.config import settings
 from app.db.session import get_db, AsyncSessionLocal
-from app.services.graphql_scraper import GraphQLAuctionScraper
 from app.services.graphql_lot_scraper import GraphQLLotScraper
 from app.scheduler.jobs import SchedulerService
+from app.services.polite_client import ScraperPausedError, polite_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,6 +30,14 @@ def get_scheduler() -> SchedulerService:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Scheduler not available"
+        )
+
+
+def _ensure_enabled():
+    if not settings.ENABLE_INTERNAL_SCRAPER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=SCRAPER_DISABLED_MESSAGE,
         )
 
 
@@ -55,278 +63,92 @@ async def verify_cron_secret(x_cron_secret: str = Header(None)):
 
 @router.post("/trigger-scraping")
 async def trigger_scraping(
-    _: None = Depends(verify_cron_secret)
+    _: None = Depends(verify_cron_secret),
+    scheduler: SchedulerService = Depends(get_scheduler)
 ):
     """
-    Trigger the GraphQL sales scraping job manually.
-    This endpoint is called by GitHub Actions or external cron services.
-
-    Headers:
-        X-Cron-Secret: The secret key to authenticate the request
-
-    Returns:
-        Status and summary of the scraping job
+    Déclenche un passage de scraping (même logique que le job planifié :
+    seules les ventes à rafraîchir sont scrapées, requêtes throttlées).
     """
-    if not settings.ENABLE_INTERNAL_SCRAPER:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=SCRAPER_DISABLED_MESSAGE,
-        )
-    logger.info("GraphQL scraping job triggered via API endpoint")
-
-    async with AsyncSessionLocal() as db:
-        try:
-            # Étape 1: Scraper TOUTES les ventes (incoming, ongoing, closed)
-            auction_scraper = GraphQLAuctionScraper(db)
-            stats_ventes = await auction_scraper.sync_auctions(
-                filter_status=None,  # TOUTES les ventes
-                max_pages=None
-            )
-            logger.info(f"Ventes synchronisées : {stats_ventes}")
-
-            # Étape 2: Scraper les lots pour les ventes actives
-            lot_scraper = GraphQLLotScraper(db)
-            from shared.models.sale import Sale
-
-            # Récupérer TOUTES les ventes (pas juste les actives)
-            result = await db.execute(
-                select(Sale).order_by(Sale.start_date.desc())
-            )
-            sales = result.scalars().all()
-
-            total_lots = 0
-            for sale in sales:
-                try:
-                    stats_lots = await lot_scraper.sync_auction_lots(
-                        auction_id=str(sale.sale_number),
-                        sale_id=sale.id,
-                        fetch_full_details=False
-                    )
-                    total_lots += stats_lots.get('total_processed', 0)
-                except Exception as e:
-                    logger.error(f"Error scraping sale #{sale.sale_number}: {e}")
-
-            await auction_scraper.close()
-            await lot_scraper.close()
-
-            summary = {
-                "ventes": stats_ventes,
-                "sales_processed": len(sales),
-                "lots_synchronized": total_lots
-            }
-
-            logger.info(f"GraphQL scraping completed successfully: {summary}")
-
-            return {
-                "status": "success",
-                "job": "graphql-scraping",
-                "summary": summary,
-                "message": f"GraphQL scraping completed: {len(sales)} ventes, {total_lots} lots"
-            }
-        except Exception as e:
-            logger.exception(f"Error during GraphQL scraping job: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GraphQL scraping job failed: {str(e)}"
-            )
+    _ensure_enabled()
+    return await scheduler.scrape_sales_job()
 
 
 @router.post("/trigger-discovery")
 async def trigger_discovery(
-    _: None = Depends(verify_cron_secret)
+    _: None = Depends(verify_cron_secret),
+    scheduler: SchedulerService = Depends(get_scheduler)
 ):
-    """
-    Trigger the GraphQL sales discovery job manually.
-    This endpoint is called by GitHub Actions or external cron services.
-
-    Headers:
-        X-Cron-Secret: The secret key to authenticate the request
-
-    Returns:
-        Status and summary of the discovery job
-    """
-    if not settings.ENABLE_INTERNAL_SCRAPER:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=SCRAPER_DISABLED_MESSAGE,
-        )
-    logger.info("GraphQL discovery job triggered via API endpoint")
-
-    async with AsyncSessionLocal() as db:
-        try:
-            scraper = GraphQLAuctionScraper(db)
-            stats = await scraper.sync_auctions(
-                filter_status=None,  # Toutes les ventes
-                max_pages=None
-            )
-            await scraper.close()
-
-            result = {
-                "status": "success",
-                "job": "graphql-discovery",
-                "stats": stats,
-                "message": f"GraphQL discovery completed: {stats}"
-            }
-
-            logger.info(f"GraphQL discovery completed successfully: {result}")
-            return result
-
-        except Exception as e:
-            logger.exception(f"Error during GraphQL discovery job: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GraphQL discovery job failed: {str(e)}"
-            )
+    """Déclenche la découverte complète de la liste des ventes."""
+    _ensure_enabled()
+    return await scheduler.discover_sales_job()
 
 
 @router.post("/force-scrape-sale/{sale_number}")
 async def force_scrape_sale(
     sale_number: int,
-    _: None = Depends(verify_cron_secret)
+    full_details: bool = False,
+    _: None = Depends(verify_cron_secret),
+    scheduler: SchedulerService = Depends(get_scheduler)
 ):
     """
-    Force scrape a specific sale using GraphQL.
-    Useful for testing or manual triggers.
+    Force le scraping des lots d'une vente.
 
-    Headers:
-        X-Cron-Secret: The secret key to authenticate the request
-
-    Returns:
-        Status and details of the scraping operation
+    full_details=true récupère aussi les caractéristiques de CHAQUE lot
+    (1 requête par lot) : à réserver aux petites ventes.
     """
-    if not settings.ENABLE_INTERNAL_SCRAPER:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=SCRAPER_DISABLED_MESSAGE,
-        )
+    _ensure_enabled()
+    if scheduler.is_running:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Un scraping est déjà en cours")
 
-    logger.info(f"Force scraping sale #{sale_number} via GraphQL API endpoint")
+    from datetime import datetime
+    from app.models.sale import Sale
 
     async with AsyncSessionLocal() as db:
-        try:
-            from shared.models.sale import Sale
-
-            # Trouver la vente par sale_number
-            result = await db.execute(
-                select(Sale).where(Sale.sale_number == sale_number)
+        result = await db.execute(select(Sale).where(Sale.sale_number == sale_number))
+        sale = result.scalar_one_or_none()
+        if not sale:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Sale {sale_number} not found in database"
             )
-            sale = result.scalar_one_or_none()
 
-            if not sale:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Sale {sale_number} not found in database"
-                )
-
-            # Scraper les lots de cette vente via GraphQL
-            lot_scraper = GraphQLLotScraper(db)
-            stats = await lot_scraper.sync_auction_lots(
+        try:
+            stats = await GraphQLLotScraper(db).sync_auction_lots(
                 auction_id=str(sale_number),
                 sale_id=sale.id,
-                fetch_full_details=True  # Détails complets pour force scrape
+                fetch_full_details=full_details
             )
-            await lot_scraper.close()
+        except ScraperPausedError as e:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
-            result = {
-                "status": "success",
-                "sale_number": sale_number,
-                "stats": stats,
-                "message": f"Sale {sale_number} scraped successfully via GraphQL"
-            }
+        sale.is_scraped = True
+        sale.last_scraped_at = datetime.utcnow()
+        await db.commit()
 
-            logger.info(f"GraphQL force scrape completed: {result}")
-            return result
-
-        except Exception as e:
-            logger.exception(f"Error during GraphQL force scrape of sale #{sale_number}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GraphQL scraping sale {sale_number} failed: {str(e)}"
-            )
+    return {"status": "success", "sale_number": sale_number, "stats": stats}
 
 
 @router.post("/force-scrape-all")
 async def force_scrape_all(
-    _: None = Depends(verify_cron_secret)
+    _: None = Depends(verify_cron_secret),
+    scheduler: SchedulerService = Depends(get_scheduler)
 ):
     """
-    Force scrape ALL sales using GraphQL.
-    Useful after fixing bugs or for bulk updates.
-
-    Headers:
-        X-Cron-Secret: The secret key to authenticate the request
-
-    Returns:
-        Status and summary of all scraping operations
+    Force le scraping de toutes les ventes non finalisées (en cours, à venir,
+    clôturées dont le prix final n'a pas encore été capturé), sans attendre leur
+    intervalle. Les ventes clôturées déjà finalisées ne sont jamais re-scrapées.
+    Toujours throttlé : peut prendre du temps.
     """
-    if not settings.ENABLE_INTERNAL_SCRAPER:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=SCRAPER_DISABLED_MESSAGE,
-        )
-    from shared.models.sale import Sale
+    _ensure_enabled()
+    return await scheduler.scrape_sales_job(force_all_open=True)
 
-    logger.info("Force scraping ALL sales via GraphQL API endpoint")
 
-    async with AsyncSessionLocal() as db:
-        try:
-            # Étape 1: Sync toutes les ventes depuis l'API
-            auction_scraper = GraphQLAuctionScraper(db)
-            stats_ventes = await auction_scraper.sync_auctions(
-                filter_status=None,  # Toutes les ventes
-                max_pages=None
-            )
-            await auction_scraper.close()
-
-            # Étape 2: Get all sales from database
-            result = await db.execute(select(Sale))
-            sales = result.scalars().all()
-
-            # Étape 3: Scraper les lots pour toutes les ventes
-            lot_scraper = GraphQLLotScraper(db)
-
-            summary = {
-                "status": "success",
-                "ventes_synced": stats_ventes,
-                "total_sales": len(sales),
-                "processed": 0,
-                "success": 0,
-                "failed": 0,
-                "total_lots": 0,
-                "details": []
-            }
-
-            for sale in sales:
-                summary["processed"] += 1
-                logger.info(f"GraphQL scraping sale #{sale.sale_number}")
-
-                try:
-                    stats = await lot_scraper.sync_auction_lots(
-                        auction_id=str(sale.sale_number),
-                        sale_id=sale.id,
-                        fetch_full_details=False  # Mode rapide
-                    )
-                    summary["success"] += 1
-                    summary["total_lots"] += stats.get('total_processed', 0)
-                    summary["details"].append({
-                        "sale_number": sale.sale_number,
-                        "stats": stats
-                    })
-                except Exception as e:
-                    logger.exception(f"Error scraping sale #{sale.sale_number}: {e}")
-                    summary["failed"] += 1
-
-            await lot_scraper.close()
-
-            logger.info(f"GraphQL force scrape all completed: {summary}")
-            return summary
-
-        except Exception as e:
-            logger.exception(f"Error during GraphQL force scrape all: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"GraphQL force scrape all failed: {str(e)}"
-            )
+@router.post("/resume")
+async def resume_after_block(_: None = Depends(verify_cron_secret)):
+    """Lève manuellement la pause du disjoncteur (à utiliser avec prudence)."""
+    polite_client.blocked_until = None
+    return {"status": "resumed", "client": polite_client.status()}
 
 
 @router.get("/jobs-status")
@@ -334,10 +156,7 @@ async def get_jobs_status(
     _: None = Depends(verify_cron_secret),
     scheduler: SchedulerService = Depends(get_scheduler)
 ):
-    """
-    Return real-time information about the internal scheduler jobs.
-    Includes job id, name, trigger and next run time.
-    """
+    """État du scheduler, du client HTTP (pause, budget) et des derniers passages."""
     jobs = [{
         "id": job.id,
         "name": job.name,
@@ -347,7 +166,10 @@ async def get_jobs_status(
 
     return {
         "scheduler": "internal",
-        "jobs": jobs
+        "running": scheduler.is_running,
+        "jobs": jobs,
+        "client": polite_client.status(),
+        "last_run": scheduler.last_run,
     }
 
 
@@ -355,164 +177,26 @@ async def get_jobs_status(
 async def diagnostic(
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Diagnostic endpoint to check scraper configuration and environment.
-    Returns information about the system, Playwright, and site accessibility.
-    """
-    import sys
-    import platform
-    from sqlalchemy import select, func
+    """Diagnostic : configuration anti-blocage, état du client et de la BDD."""
+    from sqlalchemy import func
     from app.models.sale import Sale
 
-    diagnostic_info = {
-        "system": {
-            "platform": platform.platform(),
-            "python_version": sys.version,
-        },
+    info = {
         "configuration": {
-            "auction_base_url": settings.AUCTION_BASE_URL,
             "scraper_interval_minutes": settings.SCRAPER_INTERVAL_MINUTES,
-            "sale_refresh_hours": settings.SALE_REFRESH_HOURS,
+            "sales_list_refresh_minutes": settings.SALES_LIST_REFRESH_MINUTES,
+            "max_sales_per_run": settings.MAX_SALES_PER_RUN,
+            "request_min_delay_seconds": settings.REQUEST_MIN_DELAY_SECONDS,
+            "max_requests_per_day": settings.MAX_REQUESTS_PER_DAY,
         },
+        "client": polite_client.status(),
         "database": {},
-        "playwright": {},
-        "recommendations": []
     }
-
-    # Check database sales count
     try:
-        result = await db.execute(select(func.count(Sale.id)))
-        sales_count = result.scalar_one()
-        diagnostic_info["database"]["sales_count"] = sales_count
-        diagnostic_info["database"]["status"] = "connected"
+        result = await db.execute(select(Sale.status, func.count(Sale.id)).group_by(Sale.status))
+        info["database"]["sales_by_status"] = {status_: count for status_, count in result.all()}
+        info["database"]["status"] = "connected"
     except Exception as e:
-        diagnostic_info["database"]["status"] = "error"
-        diagnostic_info["database"]["error"] = str(e)
-
-    # Check Playwright installation
-    try:
-        from playwright.async_api import async_playwright
-        diagnostic_info["playwright"]["installed"] = True
-
-        # Try to get browser info
-        try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                version = browser.version
-                await browser.close()
-                diagnostic_info["playwright"]["chromium_version"] = version
-                diagnostic_info["playwright"]["status"] = "available"
-        except Exception as e:
-            diagnostic_info["playwright"]["status"] = "installed_but_not_functional"
-            diagnostic_info["playwright"]["error"] = str(e)
-            diagnostic_info["recommendations"].append(
-                "Playwright is installed but cannot launch browser. "
-                "On Render, you may need to install system dependencies. "
-                "Add 'playwright install-deps chromium' to your build script."
-            )
-    except ImportError:
-        diagnostic_info["playwright"]["installed"] = False
-        diagnostic_info["playwright"]["status"] = "not_installed"
-        diagnostic_info["recommendations"].append(
-            "Playwright is not installed. Install it with: pip install playwright"
-        )
-
-    # Recommendations based on findings
-    if diagnostic_info["database"].get("sales_count", 0) == 0:
-        diagnostic_info["recommendations"].append(
-            "Database has 0 sales. Run the discovery job first to populate sales."
-        )
-
-    return diagnostic_info
-
-
-@router.get("/debug-scraper")
-async def debug_scraper():
-    """
-    Debug endpoint to test the scraper and see what it finds.
-    Returns detailed information about the scraping process.
-    """
-    from playwright.async_api import async_playwright
-    from selectolax.parser import HTMLParser
-
-    debug_info = {
-        "url": f"{settings.AUCTION_BASE_URL}/ventes?page=1",
-        "status": "unknown",
-        "html_length": 0,
-        "found_items": 0,
-        "sample_items": [],
-        "selectors_tried": {},
-        "error": None
-    }
-
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(ignore_https_errors=True)
-            page = await context.new_page()
-
-            # Navigate to the page
-            await page.goto(debug_info["url"], wait_until="networkidle", timeout=30000)
-
-            # Wait for JavaScript to render content
-            try:
-                await page.wait_for_selector(
-                    "div.fr-list-product__item, div.fr-card, article, div[class*='product'], div[class*='vente']",
-                    timeout=10000
-                )
-            except Exception:
-                import asyncio
-                await asyncio.sleep(3)  # Fallback delay if selectors not found
-
-            html = await page.content()
-            await browser.close()
-
-            debug_info["html_length"] = len(html)
-            debug_info["status"] = "page_loaded"
-
-            # Parse HTML
-            tree = HTMLParser(html)
-
-            # Try the current selector
-            items = tree.css("div.fr-list-product__item")
-            debug_info["found_items"] = len(items)
-            debug_info["selectors_tried"]["div.fr-list-product__item"] = len(items)
-
-            # Try alternative selectors
-            alt_selectors = [
-                "div.fr-card",
-                "div.product-item",
-                "article",
-                "div[class*='product']",
-                "div[class*='sale']",
-                "div[class*='vente']"
-            ]
-
-            for selector in alt_selectors:
-                found = tree.css(selector)
-                debug_info["selectors_tried"][selector] = len(found)
-
-            # Get sample of first 3 items if any found
-            if items:
-                for idx, item in enumerate(items[:3]):
-                    # Try to extract link
-                    link = item.css_first("h3.fr-card-product__title a[href^='/vente/']")
-                    title = link.text(strip=True) if link else "No title found"
-                    href = link.attributes.get("href", "No href") if link else "No link"
-
-                    debug_info["sample_items"].append({
-                        "index": idx,
-                        "title": title,
-                        "href": href,
-                        "html_snippet": str(item)[:500]  # First 500 chars
-                    })
-            else:
-                # If no items found, get a sample of the HTML
-                debug_info["html_sample"] = html[:2000]  # First 2000 chars
-
-    except Exception as e:
-        debug_info["status"] = "error"
-        debug_info["error"] = str(e)
-        logger.exception("Error in debug scraper: %s", e)
-
-    return debug_info
+        info["database"]["status"] = "error"
+        info["database"]["error"] = str(e)
+    return info

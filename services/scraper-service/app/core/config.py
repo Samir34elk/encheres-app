@@ -21,8 +21,25 @@ class ScraperServiceConfig(BaseServiceConfig):
     # Scheduler settings (replaces GitHub Actions cron)
     ENABLE_SCHEDULER: bool = Field(default=True)
     SCRAPER_INTERVAL_MINUTES: int = Field(default=15)
-    ENABLE_PRICE_UPDATES: bool = Field(default=True)
     ENABLE_INTERNAL_SCRAPER: bool = Field(default=True)
+
+    # Anti-blocage : throttling des requêtes vers encheres-domaine.gouv.fr
+    REQUEST_MIN_DELAY_SECONDS: float = Field(default=4.0)
+    REQUEST_JITTER_SECONDS: float = Field(default=3.0)
+    REQUEST_MAX_RETRIES: int = Field(default=3)
+    REQUEST_BACKOFF_SECONDS: float = Field(default=30.0)
+    BLOCK_COOLDOWN_MINUTES: int = Field(default=120)
+    BLOCK_MAX_COOLDOWN_HOURS: int = Field(default=24)
+    MAX_REQUESTS_PER_DAY: int = Field(default=1500)
+    HTTP_VERIFY_SSL: bool = Field(default=True)
+
+    # Anti-blocage : fréquence de rafraîchissement
+    SALES_LIST_REFRESH_MINUTES: int = Field(default=60)
+    MAX_SALES_PER_RUN: int = Field(default=15)
+    LOTS_REFRESH_ENDING_SOON_MINUTES: int = Field(default=15)   # vente finit dans < 3h
+    LOTS_REFRESH_ENDING_TODAY_MINUTES: int = Field(default=60)  # vente finit dans < 24h
+    LOTS_REFRESH_ACTIVE_MINUTES: int = Field(default=360)       # vente en cours
+    LOTS_REFRESH_UPCOMING_MINUTES: int = Field(default=720)     # vente à venir
 
     # Scraper settings
     AUCTION_BASE_URL: str = Field(default="https://encheres-domaine.gouv.fr")

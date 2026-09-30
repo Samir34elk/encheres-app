@@ -11,7 +11,6 @@ import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -19,6 +18,7 @@ from app.models.lot import Lot
 from app.models.sale import Sale
 from app.models.price_history import PriceHistory
 from app.services.notification_service import NotificationService
+from app.services.polite_client import ScraperPausedError, polite_client
 
 logger = logging.getLogger(__name__)
 
@@ -123,21 +123,12 @@ class GraphQLLotScraper:
         "&variables=%7B%22urlKey%22%3A%22{urlKey}%22%7D"
     )
 
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3",
-        "Connection": "keep-alive",
-    }
-
     def __init__(self, db: AsyncSession):
         self.db = db
         self.notification_service = NotificationService(db)
-        self.client = httpx.AsyncClient(verify=False, timeout=30.0, headers=self.HEADERS)
 
     async def close(self):
-        """Ferme le client HTTP"""
-        await self.client.aclose()
+        """Conservé pour compatibilité : le client HTTP est partagé (polite_client)."""
 
     async def fetch_lots_from_auction(
         self,
@@ -174,31 +165,19 @@ class GraphQLLotScraper:
             "variables": json.dumps(variables)
         }
 
-        try:
-            logger.info(f"Fetching lots for auction {auction_id} (page {page}, size {page_size})")
-            response = await self.client.get(self.BASE_URL, params=params)
-            response.raise_for_status()
+        logger.info(f"Fetching lots for auction {auction_id} (page {page}, size {page_size})")
+        data = await polite_client.get_json(self.BASE_URL, params=params)
 
-            data = response.json()
+        if "errors" in data:
+            logger.error(f"GraphQL errors: {data['errors']}")
+            raise Exception(f"GraphQL errors: {data['errors']}")
 
-            if "errors" in data:
-                logger.error(f"GraphQL errors: {data['errors']}")
-                raise Exception(f"GraphQL errors: {data['errors']}")
-
-            products_data = data.get("data", {}).get("products", {})
-            logger.info(
-                f"Fetched {len(products_data.get('items', []))} lots "
-                f"(total: {products_data.get('total_count', 0)})"
-            )
-
-            return products_data
-
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error fetching lots: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error fetching lots: {e}")
-            raise
+        products_data = (data.get("data") or {}).get("products") or {}
+        logger.info(
+            f"Fetched {len(products_data.get('items', []))} lots "
+            f"(total: {products_data.get('total_count', 0)})"
+        )
+        return products_data
 
     async def fetch_all_lots_from_auction(
         self,
@@ -257,10 +236,7 @@ class GraphQLLotScraper:
 
         try:
             logger.info(f"Fetching lot details for url_key: {url_key}")
-            response = await self.client.get(url)
-            response.raise_for_status()
-
-            data = response.json()
+            data = await polite_client.get_json(url)
 
             if "errors" in data:
                 logger.error(f"GraphQL errors for {url_key}: {data['errors']}")
@@ -275,9 +251,8 @@ class GraphQLLotScraper:
             logger.info(f"Successfully fetched lot: {product.get('name')}")
             return product
 
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error fetching lot {url_key}: {e}")
-            return None
+        except ScraperPausedError:
+            raise
         except Exception as e:
             logger.error(f"Error fetching lot {url_key}: {e}")
             return None
@@ -720,6 +695,7 @@ class GraphQLLotScraper:
                     await self.notification_service.trigger_new_lot_alerts(new_lot)
 
                     stats["new_lots"] += 1
+                    existing_lot = new_lot
 
                 # Optionnel: récupérer les détails complets (custom_attributes)
                 if fetch_full_details:
@@ -739,6 +715,9 @@ class GraphQLLotScraper:
                             if categories:
                                 existing_lot.categories = categories
 
+            except ScraperPausedError:
+                await self.db.commit()
+                raise
             except Exception as e:
                 logger.error(f"Error syncing lot {lot_data.get('lot_number')}: {e}")
                 stats["errors"] += 1
