@@ -1,5 +1,4 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
 from typing import AsyncGenerator
 
 from app.core.config import settings
@@ -25,8 +24,8 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-# Base class for models
-Base = declarative_base()
+# Base partagée : les modèles (shared.models.*) y sont déclarés.
+from shared.db.base import Base  # noqa: E402
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
